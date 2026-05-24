@@ -25,26 +25,18 @@ export default function SimpleNotionApp() {
   });
 
   const emptyTaskForm = { id: null, title: "", note: "", description: "" };
-  const AUTH_KEY = "simple-notion-user";
-  const HASH_SALT = "simple-notion-salt-v1";
-  const ADMIN_USER = {
-    username: "chris-dev",
-    passwordHash: "2c0ac173a225e5862f995773bbfc886e00dc4c6e114486e51c8ddf333cdefaa1",
-    role: "admin"
-  };
-
-  const ALLOWED_USERS = [
-    { username: "chris-dev", role: "admin" }
-  ];
+  const CORRECT_CODE = "1126";
+  const CODE_AUTH_KEY = "simple-notion-code-auth";
 
   const [pages, setPages] = useState([]);
   const [selectedPage, setSelectedPage] = useState(null);
   const [newPageTitle, setNewPageTitle] = useState("");
   const [isLoaded, setIsLoaded] = useState(false);
 
-  const [user, setUser] = useState(null);
-  const [credentials, setCredentials] = useState({ username: "", password: "" });
-  const [loginError, setLoginError] = useState("");
+  const [isCodeAuthenticated, setIsCodeAuthenticated] = useState(false);
+  const [showCodeModal, setShowCodeModal] = useState(false);
+  const [codeInput, setCodeInput] = useState("");
+  const [codeError, setCodeError] = useState("");
 
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
@@ -54,76 +46,34 @@ export default function SimpleNotionApp() {
   const [selectedTask, setSelectedTask] = useState(null);
 
   useEffect(() => {
-    const savedUser = localStorage.getItem(AUTH_KEY);
-    if (savedUser) {
-      try {
-        const parsedUser = JSON.parse(savedUser);
-        if (parsedUser?.username) setUser(parsedUser);
-      } catch {}
+    const savedAuth = sessionStorage.getItem(CODE_AUTH_KEY);
+    if (savedAuth === "true") {
+      setIsCodeAuthenticated(true);
     }
   }, []);
 
-  useEffect(() => {
-    if (!user) {
-      localStorage.removeItem(AUTH_KEY);
-      return;
+  const verifyCode = () => {
+    if (codeInput.trim() === CORRECT_CODE) {
+      sessionStorage.setItem(CODE_AUTH_KEY, "true");
+      setIsCodeAuthenticated(true);
+      setCodeError("");
+      setCodeInput("");
+      setShowCodeModal(false);
+    } else {
+      setCodeError("Invalid code. Preview only.");
+      setCodeInput("");
     }
-    localStorage.setItem(AUTH_KEY, JSON.stringify(user));
-  }, [user]);
-
-  const hashPassword = async (password) => {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(password + HASH_SALT);
-    const digest = await crypto.subtle.digest("SHA-256", data);
-    return Array.from(new Uint8Array(digest))
-      .map(byte => byte.toString(16).padStart(2, "0"))
-      .join("");
   };
 
-  const handleLogin = async () => {
-    const username = credentials.username.trim();
-    const password = credentials.password;
-
-    if (!username || !password) {
-      setLoginError("Enter both username and password.");
-      return;
+  const checkCodeBeforeCRUD = () => {
+    if (!isCodeAuthenticated) {
+      setShowCodeModal(true);
+      return false;
     }
-
-    const allowedUser = ALLOWED_USERS.find(u => u.username === username);
-    if (!allowedUser) {
-      setLoginError("User not found.");
-      setCredentials({ username: "", password: "" });
-      return;
-    }
-
-    if (username === ADMIN_USER.username) {
-      const passwordHash = await hashPassword(password);
-      if (passwordHash !== ADMIN_USER.passwordHash) {
-        setLoginError("Invalid admin credentials.");
-        return;
-      }
-
-      setUser({ username: ADMIN_USER.username, role: ADMIN_USER.role });
-      setLoginError("");
-      setCredentials({ username: ADMIN_USER.username, password: "" });
-      return;
-    }
-
-    if (password.length < 4) {
-      setLoginError("Password must be at least 4 characters.");
-      return;
-    }
-
-    setUser({ username, role: allowedUser.role });
-    setLoginError("");
-    setCredentials({ username, password: "" });
+    return true;
   };
 
-  const handleSignOut = () => {
-    setUser(null);
-    setCredentials({ username: "", password: "" });
-    setLoginError("");
-  };
+  const canEdit = isCodeAuthenticated;
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -174,6 +124,7 @@ export default function SimpleNotionApp() {
   );
 
   const createPage = () => {
+    if (!checkCodeBeforeCRUD()) return;
     if (!newPageTitle.trim()) return;
 
     const page = {
@@ -189,15 +140,18 @@ export default function SimpleNotionApp() {
   };
 
   const updatePage = (field, value) => {
+    if (!checkCodeBeforeCRUD()) return;
     setPages(prev => prev.map(p => p.id === selectedPage ? { ...p, [field]: value } : p));
   };
 
   const addTask = () => {
+    if (!checkCodeBeforeCRUD()) return;
     setTaskForm(emptyTaskForm);
     setIsTaskModalOpen(true);
   };
 
   const saveTask = () => {
+    if (!checkCodeBeforeCRUD()) return;
     if (!taskForm.title.trim() || !selectedPage) return;
 
     const isEdit = Boolean(taskForm.id);
@@ -235,14 +189,17 @@ export default function SimpleNotionApp() {
   };
 
   const updateTask = (taskId, field, value) => {
+    if (!checkCodeBeforeCRUD()) return;
     setPages(prev => prev.map(p => p.id === selectedPage ? { ...p, tasks: p.tasks.map(t => t.id === taskId ? { ...t, [field]: value } : t) } : p));
   };
 
   const deleteTask = (taskId) => {
+    if (!checkCodeBeforeCRUD()) return;
     setPages(prev => prev.map(p => p.id === selectedPage ? { ...p, tasks: p.tasks.filter(t => t.id !== taskId) } : p));
   };
 
   const confirmDeleteTask = (taskId) => {
+    if (!checkCodeBeforeCRUD()) return;
     setDeleteTaskId(taskId);
     setIsDeleteModalOpen(true);
   };
@@ -289,70 +246,13 @@ export default function SimpleNotionApp() {
     });
   };
 
-  if (!user) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-zinc-950 text-white p-6">
-        <div className="w-full max-w-md rounded-[2rem] border border-zinc-800 bg-zinc-900 p-10 shadow-2xl">
-          <h1 className="text-4xl font-bold mb-4 text-center">Simple Notion</h1>
-          <p className="text-zinc-400 mb-8 text-center">Sign in to access your notes and tasks.</p>
-
-          {loginError && (
-            <div className="mb-5 rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-              {loginError}
-            </div>
-          )}
-
-          <label className="block mb-4">
-            <span className="text-sm text-zinc-400">Username</span>
-            <input
-              type="text"
-              value={credentials.username}
-              onChange={e => setCredentials({ ...credentials, username: e.target.value })}
-              placeholder="Enter username"
-              className="mt-2 w-full rounded-2xl border border-zinc-700 bg-zinc-800 px-4 py-3 outline-none focus:border-white"
-            />
-          </label>
-
-          <label className="block mb-6">
-            <span className="text-sm text-zinc-400">Password</span>
-            <input
-              type="password"
-              value={credentials.password}
-              onChange={e => setCredentials({ ...credentials, password: e.target.value })}
-              placeholder="Enter password"
-              className="mt-2 w-full rounded-2xl border border-zinc-700 bg-zinc-800 px-4 py-3 outline-none focus:border-white"
-            />
-          </label>
-
-          <button
-            onClick={handleLogin}
-            className="w-full rounded-2xl bg-white py-3 text-black font-semibold transition hover:bg-zinc-200"
-          >
-            Log in
-          </button>
-        </div>
-      </div>
-    );
-  }
+  if (!isLoaded) return null;
 
   return (
     <div className="h-screen flex bg-zinc-950 text-white overflow-hidden">
       <aside className="w-80 border-r border-zinc-800 bg-zinc-900 p-4 flex flex-col">
-        <div className="mb-6 flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold">Simple Notion</h1>
-            <p className="text-xs text-zinc-400">
-              Signed in as {user?.username}
-              {user?.role === "admin" && (
-                <span className="ml-2 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300">
-                  Admin
-                </span>
-              )}
-            </p>
-          </div>
-          <button onClick={handleSignOut} className="rounded-2xl border border-zinc-700 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800">
-            Sign out
-          </button>
+        <div className="mb-6 flex items-center justify-between gap-2">
+          <h1 className="text-2xl font-bold">Simple Notion</h1>
         </div>
 
         <div className="flex gap-2 mb-4">
@@ -361,9 +261,10 @@ export default function SimpleNotionApp() {
             onChange={e => setNewPageTitle(e.target.value)}
             onKeyDown={handleNewPageKeyDown}
             placeholder="New page"
-            className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 outline-none"
+            disabled={!isCodeAuthenticated}
+            className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
           />
-          <button onClick={createPage} className="bg-white text-black px-4 rounded-xl">Add</button>
+          <button onClick={createPage} disabled={!isCodeAuthenticated} className="bg-white text-black px-4 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed">Add</button>
         </div>
 
         <div className="space-y-2 overflow-y-auto flex-1">
@@ -373,6 +274,38 @@ export default function SimpleNotionApp() {
             </div>
           ))}
         </div>
+        <div className="mt-4 border-t border-zinc-800 pt-3">
+  {!isCodeAuthenticated ? (
+    <div className="flex items-center justify-between">
+      <span className="text-xs text-amber-300 uppercase tracking-widest">
+        Preview Mode
+      </span>
+
+      <button
+        onClick={() => setShowCodeModal(true)}
+        className="bg-amber-500 text-black px-3 py-1 rounded-lg text-xs font-semibold hover:opacity-90"
+      >
+        Verify
+      </button>
+    </div>
+  ) : (
+    <div className="flex items-center justify-between">
+      <span className="text-xs text-green-400 uppercase tracking-widest">
+        Edit Mode
+      </span>
+
+      <button
+        onClick={() => {
+          sessionStorage.removeItem(CODE_AUTH_KEY);
+          setIsCodeAuthenticated(false);
+        }}
+        className="bg-zinc-700 text-white px-3 py-1 rounded-lg text-xs hover:bg-zinc-600"
+      >
+        Lock
+      </button>
+    </div>
+  )}
+</div>
       </aside>
 
       <main className="flex-1 overflow-y-auto p-6 md:p-10">
@@ -381,24 +314,26 @@ export default function SimpleNotionApp() {
             <input
               value={currentPage.title}
               onChange={e => updatePage("title", e.target.value)}
-              className="text-3xl md:text-4xl font-bold bg-transparent outline-none w-full mb-6"
+              disabled={!isCodeAuthenticated}
+              className="text-3xl md:text-4xl font-bold bg-transparent outline-none w-full mb-6 disabled:opacity-70 disabled:cursor-not-allowed"
             />
 
             <textarea
               value={currentPage.content}
               onChange={e => updatePage("content", e.target.value)}
-              className="w-full min-h-[220px] bg-zinc-900 border border-zinc-800 rounded-2xl p-4 outline-none resize-none mb-6"
+              disabled={!isCodeAuthenticated}
+              className="w-full min-h-[220px] bg-zinc-900 border border-zinc-800 rounded-2xl p-4 outline-none resize-none mb-6 disabled:opacity-70 disabled:cursor-not-allowed"
             />
 
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold">Tasks</h2>
-              <button onClick={addTask} className="bg-white text-black px-4 py-2 rounded-xl">Add Task</button>
+              <button onClick={addTask} disabled={!isCodeAuthenticated} className="bg-white text-black px-4 py-2 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed">Add Task</button>
             </div>
 
             <div className="space-y-3">
               {sortedTasks.map(t => (
                 <div key={t.id} className="flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
-                  <input type="checkbox" checked={t.done} onChange={e => updateTask(t.id, "done", e.target.checked)} />
+                  <input type="checkbox" checked={t.done} onChange={e => updateTask(t.id, "done", e.target.checked)} disabled={!isCodeAuthenticated} />
 
                   <div
                     className="flex-1 min-w-0 cursor-pointer"
@@ -411,7 +346,7 @@ export default function SimpleNotionApp() {
                     <div className="text-xs text-zinc-400 truncate">{t.note}</div>
                   </div>
 
-                  <button onClick={() => confirmDeleteTask(t.id)} className="text-red-400 px-3 py-1 rounded-md hover:bg-red-500/10">Delete</button>
+                  <button onClick={() => confirmDeleteTask(t.id)} disabled={!isCodeAuthenticated} className="text-red-400 px-3 py-1 rounded-md hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed">Delete</button>
                 </div>
               ))}
             </div>
@@ -451,20 +386,33 @@ export default function SimpleNotionApp() {
         </div>
     
         {/* Floating Edit Button */}
-        <div className="fixed bottom-6 right-6">
-          <button
-            onClick={() => {
-              setTaskForm(selectedTask);
-              setIsViewModalOpen(false);
-              setIsTaskModalOpen(true);
-            }}
-            className="bg-white text-black px-5 py-3 rounded-xl shadow-lg hover:scale-105 transition"
-          >
-            Edit
-          </button>
-        </div>
+        {canEdit && (
+          <div className="fixed bottom-6 right-6">
+            <button
+              onClick={() => {
+                setTaskForm(selectedTask);
+                setIsViewModalOpen(false);
+                setIsTaskModalOpen(true);
+              }}
+              className="bg-white text-black px-5 py-3 rounded-xl shadow-lg hover:scale-105 transition"
+            >
+              Edit
+            </button>
+          </div>
+        )}
+        {!canEdit && (
+  <div className="fixed bottom-6 right-6">
+    <button
+      onClick={() => setShowCodeModal(true)}
+      className="bg-amber-500 text-black px-5 py-3 rounded-xl shadow-lg hover:scale-105 transition"
+    >
+      Verify to Edit
+    </button>
+  </div>
+)}
     
       </div>
+      
     )}
       {isTaskModalOpen && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4">
@@ -494,6 +442,36 @@ export default function SimpleNotionApp() {
             <div className="flex justify-end gap-2">
               <button onClick={handleCancelDelete} className="bg-zinc-700 px-4 py-2 rounded-xl">Cancel</button>
               <button onClick={handleConfirmDelete} className="bg-red-500 text-white px-4 py-2 rounded-xl">Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCodeModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4">
+          <div className="bg-zinc-900 w-full max-w-md rounded-3xl p-6 space-y-4 border border-zinc-800">
+            <h2 className="text-2xl font-bold">Enter Code</h2>
+            <p className="text-zinc-400">Code required to modify content</p>
+
+            {codeError && (
+              <div className="rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                {codeError}
+              </div>
+            )}
+
+            <input
+              type="password"
+              value={codeInput}
+              onChange={e => setCodeInput(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && verifyCode()}
+              placeholder="Enter code"
+              className="w-full rounded-2xl border border-zinc-700 bg-zinc-800 px-4 py-2 text-center outline-none focus:border-white"
+              autoFocus
+            />
+
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setShowCodeModal(false)} className="bg-zinc-700 px-4 py-2 rounded-xl">Cancel</button>
+              <button onClick={verifyCode} className="bg-white text-black px-4 py-2 rounded-xl font-semibold">Verify</button>
             </div>
           </div>
         </div>

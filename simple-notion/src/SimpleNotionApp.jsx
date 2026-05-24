@@ -25,11 +25,26 @@ export default function SimpleNotionApp() {
   });
 
   const emptyTaskForm = { id: null, title: "", note: "", description: "" };
+  const AUTH_KEY = "simple-notion-user";
+  const HASH_SALT = "simple-notion-salt-v1";
+  const ADMIN_USER = {
+    username: "chris-dev",
+    passwordHash: "2c0ac173a225e5862f995773bbfc886e00dc4c6e114486e51c8ddf333cdefaa1",
+    role: "admin"
+  };
+
+  const ALLOWED_USERS = [
+    { username: "chris-dev", role: "admin" }
+  ];
 
   const [pages, setPages] = useState([]);
   const [selectedPage, setSelectedPage] = useState(null);
   const [newPageTitle, setNewPageTitle] = useState("");
   const [isLoaded, setIsLoaded] = useState(false);
+
+  const [user, setUser] = useState(null);
+  const [credentials, setCredentials] = useState({ username: "", password: "" });
+  const [loginError, setLoginError] = useState("");
 
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
@@ -37,6 +52,78 @@ export default function SimpleNotionApp() {
   const [deleteTaskId, setDeleteTaskId] = useState(null);
   const [taskForm, setTaskForm] = useState(emptyTaskForm);
   const [selectedTask, setSelectedTask] = useState(null);
+
+  useEffect(() => {
+    const savedUser = localStorage.getItem(AUTH_KEY);
+    if (savedUser) {
+      try {
+        const parsedUser = JSON.parse(savedUser);
+        if (parsedUser?.username) setUser(parsedUser);
+      } catch {}
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!user) {
+      localStorage.removeItem(AUTH_KEY);
+      return;
+    }
+    localStorage.setItem(AUTH_KEY, JSON.stringify(user));
+  }, [user]);
+
+  const hashPassword = async (password) => {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password + HASH_SALT);
+    const digest = await crypto.subtle.digest("SHA-256", data);
+    return Array.from(new Uint8Array(digest))
+      .map(byte => byte.toString(16).padStart(2, "0"))
+      .join("");
+  };
+
+  const handleLogin = async () => {
+    const username = credentials.username.trim();
+    const password = credentials.password;
+
+    if (!username || !password) {
+      setLoginError("Enter both username and password.");
+      return;
+    }
+
+    const allowedUser = ALLOWED_USERS.find(u => u.username === username);
+    if (!allowedUser) {
+      setLoginError("User not found.");
+      setCredentials({ username: "", password: "" });
+      return;
+    }
+
+    if (username === ADMIN_USER.username) {
+      const passwordHash = await hashPassword(password);
+      if (passwordHash !== ADMIN_USER.passwordHash) {
+        setLoginError("Invalid admin credentials.");
+        return;
+      }
+
+      setUser({ username: ADMIN_USER.username, role: ADMIN_USER.role });
+      setLoginError("");
+      setCredentials({ username: ADMIN_USER.username, password: "" });
+      return;
+    }
+
+    if (password.length < 4) {
+      setLoginError("Password must be at least 4 characters.");
+      return;
+    }
+
+    setUser({ username, role: allowedUser.role });
+    setLoginError("");
+    setCredentials({ username, password: "" });
+  };
+
+  const handleSignOut = () => {
+    setUser(null);
+    setCredentials({ username: "", password: "" });
+    setLoginError("");
+  };
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -201,10 +288,72 @@ export default function SimpleNotionApp() {
       return <span key={index}>{part}</span>;
     });
   };
+
+  if (!user) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-zinc-950 text-white p-6">
+        <div className="w-full max-w-md rounded-[2rem] border border-zinc-800 bg-zinc-900 p-10 shadow-2xl">
+          <h1 className="text-4xl font-bold mb-4 text-center">Simple Notion</h1>
+          <p className="text-zinc-400 mb-8 text-center">Sign in to access your notes and tasks.</p>
+
+          {loginError && (
+            <div className="mb-5 rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+              {loginError}
+            </div>
+          )}
+
+          <label className="block mb-4">
+            <span className="text-sm text-zinc-400">Username</span>
+            <input
+              type="text"
+              value={credentials.username}
+              onChange={e => setCredentials({ ...credentials, username: e.target.value })}
+              placeholder="Enter username"
+              className="mt-2 w-full rounded-2xl border border-zinc-700 bg-zinc-800 px-4 py-3 outline-none focus:border-white"
+            />
+          </label>
+
+          <label className="block mb-6">
+            <span className="text-sm text-zinc-400">Password</span>
+            <input
+              type="password"
+              value={credentials.password}
+              onChange={e => setCredentials({ ...credentials, password: e.target.value })}
+              placeholder="Enter password"
+              className="mt-2 w-full rounded-2xl border border-zinc-700 bg-zinc-800 px-4 py-3 outline-none focus:border-white"
+            />
+          </label>
+
+          <button
+            onClick={handleLogin}
+            className="w-full rounded-2xl bg-white py-3 text-black font-semibold transition hover:bg-zinc-200"
+          >
+            Log in
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen flex bg-zinc-950 text-white overflow-hidden">
       <aside className="w-80 border-r border-zinc-800 bg-zinc-900 p-4 flex flex-col">
-        <h1 className="text-2xl font-bold mb-6">Simple Notion</h1>
+        <div className="mb-6 flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">Simple Notion</h1>
+            <p className="text-xs text-zinc-400">
+              Signed in as {user?.username}
+              {user?.role === "admin" && (
+                <span className="ml-2 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300">
+                  Admin
+                </span>
+              )}
+            </p>
+          </div>
+          <button onClick={handleSignOut} className="rounded-2xl border border-zinc-700 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800">
+            Sign out
+          </button>
+        </div>
 
         <div className="flex gap-2 mb-4">
           <input

@@ -1,19 +1,42 @@
-import { useEffect, useMemo, useState } from "react";
+import { db } from "./firebase";
+
+import {
+  collection,
+  doc,
+  getDocs,
+  setDoc,
+  deleteDoc,
+} from "firebase/firestore";
+
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 export default function SimpleNotionApp() {
-  const STORAGE_KEY = "simple-notion-pages";
-
   const createId = () => {
-    if (typeof crypto !== "undefined" && crypto.randomUUID)
+    if (
+      typeof crypto !== "undefined" &&
+      crypto.randomUUID
+    ) {
       return crypto.randomUUID();
+    }
 
-    return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    return `${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2)}`;
   };
+  const pagesCollection = collection(
+    db,
+    "notionPages"
+  );
 
   const createDefaultPage = () => ({
     id: createId(),
     title: "My First Page",
-    content: "# Welcome\n\nStart writing your tasks here...",
+    content:
+      "# Welcome\n\nStart writing your tasks here...",
     tasks: [
       {
         id: createId(),
@@ -34,29 +57,60 @@ export default function SimpleNotionApp() {
   };
 
   const CORRECT_CODE = "1126";
-  const CODE_AUTH_KEY = "simple-notion-code-auth";
+  const CODE_AUTH_KEY =
+    "simple-notion-code-auth";
 
   const [pages, setPages] = useState([]);
-  const [selectedPage, setSelectedPage] = useState(null);
-  const [newPageTitle, setNewPageTitle] = useState("");
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [selectedPage, setSelectedPage] =
+    useState(null);
+  const [newPageTitle, setNewPageTitle] =
+    useState("");
+  const [isLoaded, setIsLoaded] =
+    useState(false);
 
-  const [isCodeAuthenticated, setIsCodeAuthenticated] = useState(false);
-  const [showCodeModal, setShowCodeModal] = useState(false);
-  const [codeInput, setCodeInput] = useState("");
-  const [codeError, setCodeError] = useState("");
+  const [
+    isCodeAuthenticated,
+    setIsCodeAuthenticated,
+  ] = useState(false);
 
-  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
-  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [showCodeModal, setShowCodeModal] =
+    useState(false);
 
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [deleteTaskId, setDeleteTaskId] = useState(null);
+  const [codeInput, setCodeInput] =
+    useState("");
 
-  const [taskForm, setTaskForm] = useState(emptyTaskForm);
-  const [selectedTask, setSelectedTask] = useState(null);
+  const [codeError, setCodeError] =
+    useState("");
 
+  const [
+    isTaskModalOpen,
+    setIsTaskModalOpen,
+  ] = useState(false);
+
+  const [
+    isViewModalOpen,
+    setIsViewModalOpen,
+  ] = useState(false);
+
+  const [
+    isDeleteModalOpen,
+    setIsDeleteModalOpen,
+  ] = useState(false);
+
+  const [deleteTaskId, setDeleteTaskId] =
+    useState(null);
+
+  const [taskForm, setTaskForm] =
+    useState(emptyTaskForm);
+
+  const [selectedTask, setSelectedTask] =
+    useState(null);
+
+  // AUTH
   useEffect(() => {
-    const savedAuth = sessionStorage.getItem(CODE_AUTH_KEY);
+    const savedAuth = sessionStorage.getItem(
+      CODE_AUTH_KEY
+    );
 
     if (savedAuth === "true") {
       setIsCodeAuthenticated(true);
@@ -65,13 +119,20 @@ export default function SimpleNotionApp() {
 
   const verifyCode = () => {
     if (codeInput.trim() === CORRECT_CODE) {
-      sessionStorage.setItem(CODE_AUTH_KEY, "true");
+      sessionStorage.setItem(
+        CODE_AUTH_KEY,
+        "true"
+      );
+
       setIsCodeAuthenticated(true);
       setCodeError("");
       setCodeInput("");
       setShowCodeModal(false);
     } else {
-      setCodeError("Invalid code. Preview only.");
+      setCodeError(
+        "Invalid code. Preview only."
+      );
+
       setCodeInput("");
     }
   };
@@ -86,71 +147,180 @@ export default function SimpleNotionApp() {
   };
 
   const canEdit = isCodeAuthenticated;
+  const DOC_REF = doc(db, "notion", "main");
 
-  useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
+// CREATE / UPDATE ENTIRE DOCUMENT
+const saveToFirestore = async (
+  updatedPages,
+  updatedSelectedPage
+) => {
+  try {
+    await setDoc(DOC_REF, {
+      pages: updatedPages,
+      selectedPage: updatedSelectedPage,
+      updatedAt: Date.now(),
+    });
 
-    try {
-      if (!saved) throw new Error();
+    console.log("Saved to Firestore");
+  } catch (err) {
+    console.error(
+      "Firestore Save Error:",
+      err
+    );
+  }
+};
 
-      const parsed = JSON.parse(saved);
+// READ DOCUMENT
+const loadFromFirestore = async () => {
+  try {
+    const docSnap = await getDoc(DOC_REF);
 
-      const pagesData = Array.isArray(parsed)
-        ? parsed
-        : parsed?.pages;
+    if (docSnap.exists()) {
+      const data = docSnap.data();
 
-      const selectedId = Array.isArray(parsed)
-        ? null
-        : parsed?.selectedPage || null;
-
-      if (!Array.isArray(pagesData)) throw new Error();
-
-      const sanitized = pagesData.map((p) => ({
-        ...p,
-        tasks: Array.isArray(p.tasks)
-          ? p.tasks.map((t) => ({
-              id: t.id || createId(),
-              title: t.title || "",
-              note: t.note || "",
-              description: t.description || "",
-              done: Boolean(t.done),
-              createdAt:
-                typeof t.createdAt === "number"
-                  ? t.createdAt
-                  : Date.now(),
-            }))
-          : [],
-      }));
-
-      setPages(sanitized);
-
+      setPages(data.pages || []);
       setSelectedPage(
-        selectedId &&
-          sanitized.some((p) => p.id === selectedId)
-          ? selectedId
-          : sanitized[0]?.id || null
+        data.selectedPage || null
       );
-    } catch {
-      const starter = createDefaultPage();
+    } else {
+      const starter =
+        createDefaultPage();
 
       setPages([starter]);
       setSelectedPage(starter.id);
+
+      await saveToFirestore(
+        [starter],
+        starter.id
+      );
+    }
+  } catch (err) {
+    console.error(
+      "Firestore Load Error:",
+      err
+    );
+
+    const starter =
+      createDefaultPage();
+
+    setPages([starter]);
+    setSelectedPage(starter.id);
+  } finally {
+    setIsLoaded(true);
+  }
+};
+const savePageToFirestore = async (
+  page
+) => {
+  try {
+    await setDoc(
+      doc(
+        db,
+        "notionPages",
+        page.id
+      ),
+      page
+    );
+
+    console.log("Page saved");
+  } catch (err) {
+    console.error(err);
+  }
+};
+const deletePageFromFirestore =
+  async (pageId) => {
+    try {
+      await deleteDoc(
+        doc(
+          db,
+          "notionPages",
+          pageId
+        )
+      );
+
+      console.log("Page deleted");
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+// DELETE ENTIRE DATABASE DOCUMENT
+const clearFirestore = async () => {
+  try {
+    await deleteDoc(DOC_REF);
+
+    console.log(
+      "Firestore document deleted"
+    );
+  } catch (err) {
+    console.error(
+      "Firestore Delete Error:",
+      err
+    );
+  }
+};
+
+  useEffect(() => {
+  const loadPages = async () => {
+    try {
+      const snapshot =
+        await getDocs(
+          pagesCollection
+        );
+
+      if (!snapshot.empty) {
+        const loadedPages =
+          snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }));
+
+        setPages(loadedPages);
+
+        setSelectedPage(
+          loadedPages[0]?.id || null
+        );
+      } else {
+        const starter =
+          createDefaultPage();
+
+        await setDoc(
+          doc(
+            db,
+            "notionPages",
+            starter.id
+          ),
+          starter
+        );
+
+        setPages([starter]);
+
+        setSelectedPage(starter.id);
+      }
+    } catch (err) {
+      console.error(err);
     } finally {
       setIsLoaded(true);
     }
-  }, []);
+  };
 
+  loadPages();
+}, []);
+
+  // SAVE TO FIREBASE
   useEffect(() => {
-    if (!isLoaded) return;
+  if (!isLoaded) return;
 
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ pages, selectedPage })
-    );
-  }, [pages, selectedPage, isLoaded]);
+  pages.forEach((page) => {
+    savePageToFirestore(page);
+  });
+}, [pages, isLoaded]);
 
   const currentPage = useMemo(
-    () => pages.find((p) => p.id === selectedPage) || null,
+    () =>
+      pages.find(
+        (p) => p.id === selectedPage
+      ) || null,
     [pages, selectedPage]
   );
 
@@ -158,7 +328,8 @@ export default function SimpleNotionApp() {
     () =>
       currentPage
         ? [...currentPage.tasks].sort(
-            (a, b) => b.createdAt - a.createdAt
+            (a, b) =>
+              b.createdAt - a.createdAt
           )
         : [],
     [currentPage]
@@ -166,6 +337,7 @@ export default function SimpleNotionApp() {
 
   const createPage = () => {
     if (!checkCodeBeforeCRUD()) return;
+
     if (!newPageTitle.trim()) return;
 
     const page = {
@@ -176,7 +348,9 @@ export default function SimpleNotionApp() {
     };
 
     setPages((prev) => [page, ...prev]);
+
     setSelectedPage(page.id);
+
     setNewPageTitle("");
   };
 
@@ -196,13 +370,18 @@ export default function SimpleNotionApp() {
     if (!checkCodeBeforeCRUD()) return;
 
     setTaskForm(emptyTaskForm);
+
     setIsTaskModalOpen(true);
   };
 
   const saveTask = () => {
     if (!checkCodeBeforeCRUD()) return;
 
-    if (!taskForm.title.trim() || !selectedPage) return;
+    if (
+      !taskForm.title.trim() ||
+      !selectedPage
+    )
+      return;
 
     const isEdit = Boolean(taskForm.id);
 
@@ -229,7 +408,8 @@ export default function SimpleNotionApp() {
               id: createId(),
               title: taskForm.title,
               note: taskForm.note,
-              description: taskForm.description,
+              description:
+                taskForm.description,
               done: false,
               createdAt: Date.now(),
             },
@@ -239,10 +419,15 @@ export default function SimpleNotionApp() {
     );
 
     setIsTaskModalOpen(false);
+
     setTaskForm(emptyTaskForm);
   };
 
-  const updateTask = (taskId, field, value) => {
+  const updateTask = (
+    taskId,
+    field,
+    value
+  ) => {
     if (!checkCodeBeforeCRUD()) return;
 
     setPages((prev) =>
@@ -252,7 +437,10 @@ export default function SimpleNotionApp() {
               ...p,
               tasks: p.tasks.map((t) =>
                 t.id === taskId
-                  ? { ...t, [field]: value }
+                  ? {
+                      ...t,
+                      [field]: value,
+                    }
                   : t
               ),
             }
@@ -269,17 +457,22 @@ export default function SimpleNotionApp() {
         p.id === selectedPage
           ? {
               ...p,
-              tasks: p.tasks.filter((t) => t.id !== taskId),
+              tasks: p.tasks.filter(
+                (t) => t.id !== taskId
+              ),
             }
           : p
       )
     );
   };
 
-  const confirmDeleteTask = (taskId) => {
+  const confirmDeleteTask = (
+    taskId
+  ) => {
     if (!checkCodeBeforeCRUD()) return;
 
     setDeleteTaskId(taskId);
+
     setIsDeleteModalOpen(true);
   };
 
@@ -289,11 +482,13 @@ export default function SimpleNotionApp() {
     }
 
     setDeleteTaskId(null);
+
     setIsDeleteModalOpen(false);
   };
 
   const handleCancelDelete = () => {
     setDeleteTaskId(null);
+
     setIsDeleteModalOpen(false);
   };
 
@@ -306,26 +501,33 @@ export default function SimpleNotionApp() {
   const renderWithLinks = (text) => {
     if (!text) return null;
 
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const urlRegex =
+      /(https?:\/\/[^\s]+)/g;
 
-    return text.split(urlRegex).map((part, index) => {
-      if (urlRegex.test(part)) {
+    return text
+      .split(urlRegex)
+      .map((part, index) => {
+        if (urlRegex.test(part)) {
+          return (
+            <a
+              key={index}
+              href={part}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-400 underline break-all"
+              onClick={(e) =>
+                e.stopPropagation()
+              }
+            >
+              {part}
+            </a>
+          );
+        }
+
         return (
-          <a
-            key={index}
-            href={part}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-400 underline break-all"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {part}
-          </a>
+          <span key={index}>{part}</span>
         );
-      }
-
-      return <span key={index}>{part}</span>;
-    });
+      });
   };
 
   if (!isLoaded) return null;

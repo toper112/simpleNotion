@@ -688,7 +688,9 @@ const clearFirestore = async () => {
                     </div>
 
                     <div className="text-xs text-zinc-400 break-words">
-                      {t.note}
+                      {t.note?.length > 80
+                        ? t.note.slice(0, 80) + "..."
+                        : t.note}
                     </div>
                   </div>
 

@@ -3,7 +3,7 @@ import { db } from "./firebase";
 import {
   collection,
   doc,
-  getDocs,
+  onSnapshot,
   setDoc,
   deleteDoc,
 } from "firebase/firestore";
@@ -37,6 +37,8 @@ export default function SimpleNotionApp() {
     title: "My First Page",
     content:
       "# Welcome\n\nStart writing your tasks here...",
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
     tasks: [
       {
         id: createId(),
@@ -45,6 +47,7 @@ export default function SimpleNotionApp() {
         description: "",
         done: false,
         createdAt: Date.now(),
+        status: "NOT STARTED",
       },
     ],
   });
@@ -105,6 +108,10 @@ export default function SimpleNotionApp() {
 
   const [selectedTask, setSelectedTask] =
     useState(null);
+
+  const [showPageDeleteModal, setShowPageDeleteModal] = useState(false);
+  const [pageToDeleteId, setPageToDeleteId] = useState(null);
+  const [pageDeleteConfirmInput, setPageDeleteConfirmInput] = useState("");
 
   // AUTH
   useEffect(() => {
@@ -179,20 +186,13 @@ const loadFromFirestore = async () => {
       const data = docSnap.data();
 
       setPages(data.pages || []);
-      setSelectedPage(
-        data.selectedPage || null
-      );
+      setSelectedPage(null);
     } else {
       const starter =
         createDefaultPage();
 
       setPages([starter]);
-      setSelectedPage(starter.id);
-
-      await saveToFirestore(
-        [starter],
-        starter.id
-      );
+      setSelectedPage(null);
     }
   } catch (err) {
     console.error(
@@ -261,60 +261,47 @@ const clearFirestore = async () => {
 };
 
   useEffect(() => {
-  const loadPages = async () => {
-    try {
-      const snapshot =
-        await getDocs(
-          pagesCollection
-        );
+    let firstSnapshot = true;
 
-      if (!snapshot.empty) {
-        const loadedPages =
-          snapshot.docs.map((doc) => ({
+    const unsubscribe = onSnapshot(
+      pagesCollection,
+      (snapshot) => {
+        if (!snapshot.empty) {
+          const loadedPages = snapshot.docs.map((doc) => ({
             id: doc.id,
             ...doc.data(),
           }));
 
-        setPages(loadedPages);
+          setPages(loadedPages);
+        } else {
+          const starter = createDefaultPage();
 
-        setSelectedPage(
-          loadedPages[0]?.id || null
-        );
-      } else {
-        const starter =
-          createDefaultPage();
+          setDoc(
+            doc(db, "notionPages", starter.id),
+            starter
+          ).catch((err) => console.error(err));
 
-        await setDoc(
-          doc(
-            db,
-            "notionPages",
-            starter.id
-          ),
-          starter
-        );
+          setPages([starter]);
+        }
 
-        setPages([starter]);
-
-        setSelectedPage(starter.id);
+        if (firstSnapshot) {
+          setSelectedPage(null);
+          setIsLoaded(true);
+          firstSnapshot = false;
+        }
+      },
+      (err) => {
+        console.error(err);
+        if (firstSnapshot) {
+          setSelectedPage(null);
+          setIsLoaded(true);
+          firstSnapshot = false;
+        }
       }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsLoaded(true);
-    }
-  };
+    );
 
-  loadPages();
-}, []);
-
-  // SAVE TO FIREBASE
-  useEffect(() => {
-  if (!isLoaded) return;
-
-  pages.forEach((page) => {
-    savePageToFirestore(page);
-  });
-}, [pages, isLoaded]);
+    return () => unsubscribe();
+  }, []);
 
   const currentPage = useMemo(
     () =>
@@ -335,6 +322,21 @@ const clearFirestore = async () => {
     [currentPage]
   );
 
+  const pagesSorted = useMemo(
+    () =>
+      [...pages].sort(
+        (a, b) =>
+          (b.updatedAt || b.createdAt || 0) -
+          (a.updatedAt || a.createdAt || 0)
+      ),
+    [pages]
+  );
+
+  const formatPageDate = (timestamp) =>
+    timestamp
+      ? new Date(timestamp).toLocaleString()
+      : "";
+
   const createPage = () => {
     if (!checkCodeBeforeCRUD()) return;
 
@@ -344,26 +346,33 @@ const clearFirestore = async () => {
       id: createId(),
       title: newPageTitle,
       content: "",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
       tasks: [],
     };
 
     setPages((prev) => [page, ...prev]);
+    savePageToFirestore(page);
 
     setSelectedPage(page.id);
-
     setNewPageTitle("");
   };
 
   const updatePage = (field, value) => {
     if (!checkCodeBeforeCRUD()) return;
 
-    setPages((prev) =>
-      prev.map((p) =>
+    setPages((prev) => {
+      const next = prev.map((p) =>
         p.id === selectedPage
-          ? { ...p, [field]: value }
+          ? { ...p, [field]: value, updatedAt: Date.now() }
           : p
-      )
-    );
+      );
+      const updatedPage = next.find(
+        (p) => p.id === selectedPage
+      );
+      if (updatedPage) savePageToFirestore(updatedPage);
+      return next;
+    });
   };
 
   const addTask = () => {
@@ -385,13 +394,14 @@ const clearFirestore = async () => {
 
     const isEdit = Boolean(taskForm.id);
 
-    setPages((prev) =>
-      prev.map((p) => {
+    setPages((prev) => {
+      const next = prev.map((p) => {
         if (p.id !== selectedPage) return p;
 
         if (isEdit) {
           return {
             ...p,
+            updatedAt: Date.now(),
             tasks: p.tasks.map((t) =>
               t.id === taskForm.id
                 ? { ...t, ...taskForm }
@@ -402,6 +412,7 @@ const clearFirestore = async () => {
 
         return {
           ...p,
+          updatedAt: Date.now(),
           tasks: [
             ...p.tasks,
             {
@@ -415,12 +426,86 @@ const clearFirestore = async () => {
             },
           ],
         };
-      })
-    );
+      });
+
+      const updatedPage = next.find(
+        (p) => p.id === selectedPage
+      );
+      if (updatedPage) savePageToFirestore(updatedPage);
+      return next;
+    });
 
     setIsTaskModalOpen(false);
 
     setTaskForm(emptyTaskForm);
+  };
+
+  const handleStatusChange = (taskId, value) => {
+    if (!checkCodeBeforeCRUD()) return;
+
+    // Update status without changing page.updatedAt
+    setPages((prev) => {
+      const original = prev.find((p) => p.id === selectedPage);
+
+      const next = prev.map((p) =>
+        p.id === selectedPage
+          ? {
+              ...p,
+              tasks: p.tasks.map((t) =>
+                t.id === taskId
+                  ? {
+                      ...t,
+                      status: value,
+                      // keep checkbox in sync: DONE -> checked, others -> unchecked
+                      done: value === "DONE",
+                    }
+                  : t
+              ),
+            }
+          : p
+      );
+
+      const updatedPage = next.find((p) => p.id === selectedPage);
+      if (updatedPage) {
+        const toSave = { ...updatedPage, updatedAt: original?.updatedAt };
+        savePageToFirestore(toSave);
+      }
+
+      return next;
+    });
+  };
+
+  const handleCheckboxChange = (taskId, checked) => {
+    if (!checkCodeBeforeCRUD()) return;
+    setPages((prev) => {
+      const original = prev.find((p) => p.id === selectedPage);
+
+      const next = prev.map((p) =>
+        p.id === selectedPage
+          ? {
+              ...p,
+              tasks: p.tasks.map((t) =>
+                t.id === taskId
+                  ? {
+                      ...t,
+                      done: checked,
+                      status: checked ? "DONE" : "NOT STARTED",
+                    }
+                  : t
+              ),
+            }
+          : p
+      );
+
+      const updatedPage = next.find((p) => p.id === selectedPage);
+      if (updatedPage) {
+        // preserve original updatedAt when toggling done
+        const toSave = { ...updatedPage, updatedAt: original?.updatedAt };
+        savePageToFirestore(toSave);
+      }
+
+      return next;
+    });
   };
 
   const updateTask = (
@@ -430,11 +515,12 @@ const clearFirestore = async () => {
   ) => {
     if (!checkCodeBeforeCRUD()) return;
 
-    setPages((prev) =>
-      prev.map((p) =>
+    setPages((prev) => {
+      const next = prev.map((p) =>
         p.id === selectedPage
           ? {
               ...p,
+              updatedAt: Date.now(),
               tasks: p.tasks.map((t) =>
                 t.id === taskId
                   ? {
@@ -445,25 +531,36 @@ const clearFirestore = async () => {
               ),
             }
           : p
-      )
-    );
+      );
+      const updatedPage = next.find(
+        (p) => p.id === selectedPage
+      );
+      if (updatedPage) savePageToFirestore(updatedPage);
+      return next;
+    });
   };
 
   const deleteTask = (taskId) => {
     if (!checkCodeBeforeCRUD()) return;
 
-    setPages((prev) =>
-      prev.map((p) =>
+    setPages((prev) => {
+      const next = prev.map((p) =>
         p.id === selectedPage
           ? {
               ...p,
+              updatedAt: Date.now(),
               tasks: p.tasks.filter(
                 (t) => t.id !== taskId
               ),
             }
           : p
-      )
-    );
+      );
+      const updatedPage = next.find(
+        (p) => p.id === selectedPage
+      );
+      if (updatedPage) savePageToFirestore(updatedPage);
+      return next;
+    });
   };
 
   const confirmDeleteTask = (
@@ -566,19 +663,39 @@ const clearFirestore = async () => {
         </div>
 
         <div className="space-y-2 overflow-y-auto flex-1 pb-2">
-          {pages.map((p) => (
+          {pagesSorted.map((p) => (
             <div
               key={p.id}
-              onClick={() => setSelectedPage(p.id)}
-              className={`p-3 rounded-2xl border cursor-pointer transition ${
+              className={`p-3 rounded-2xl border transition ${
                 selectedPage === p.id
                   ? "bg-white text-black border-white"
                   : "bg-zinc-800 border-zinc-700 hover:bg-zinc-700"
               }`}
             >
-              <span className="truncate font-medium block">
-                {p.title}
-              </span>
+              <div className="flex items-center justify-between" onClick={() => setSelectedPage(p.id)}>
+                <div className="flex-1 min-w-0">
+                  <span className="truncate font-medium block">
+                    {p.title}
+                  </span>
+                  <span className="text-xs text-zinc-400 block mt-1">
+                    {formatPageDate(p.updatedAt || p.createdAt)}
+                  </span>
+                </div>
+
+                {isCodeAuthenticated && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPageToDeleteId(p.id);
+                      setPageDeleteConfirmInput("");
+                      setShowPageDeleteModal(true);
+                    }}
+                    className="ml-3 text-red-400 px-3 py-2 rounded-md hover:bg-red-500/10"
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -621,7 +738,7 @@ const clearFirestore = async () => {
 
       {/* MAIN */}
       <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-10">
-        {currentPage && (
+        {currentPage ? (
           <div className="max-w-4xl mx-auto">
 
             <input
@@ -667,13 +784,14 @@ const clearFirestore = async () => {
                     type="checkbox"
                     checked={t.done}
                     onChange={(e) =>
-                      updateTask(
-                        t.id,
-                        "done",
-                        e.target.checked
-                      )
+                      handleCheckboxChange(t.id, e.target.checked)
                     }
                     disabled={!isCodeAuthenticated}
+                    className="h-5 w-5 rounded border-zinc-700 bg-zinc-900 text-white disabled:opacity-80 disabled:cursor-not-allowed"
+                    style={{
+                      accentColor: t.done ? "#34D399" : undefined,
+                      opacity: !isCodeAuthenticated && t.done ? 1 : undefined,
+                    }}
                   />
 
                   <div
@@ -694,6 +812,25 @@ const clearFirestore = async () => {
                     </div>
                   </div>
 
+                  <select
+                    value={t.status || "NOT STARTED"}
+                    onChange={(e) =>
+                      handleStatusChange(t.id, e.target.value)
+                    }
+                    disabled={!isCodeAuthenticated}
+                    className={`ml-2 px-3 py-1 rounded-md bg-zinc-800 border border-zinc-700 text-sm ${
+                      t.status === "EDITING"
+                        ? "text-blue-400"
+                        : t.status === "DONE"
+                        ? "text-green-400"
+                        : "text-zinc-300"
+                    }`}
+                  >
+                    <option value="EDITING">EDITING</option>
+                    <option value="NOT STARTED">NOT STARTED</option>
+                    <option value="DONE">DONE</option>
+                  </select>
+
                   <button
                     onClick={() =>
                       confirmDeleteTask(t.id)
@@ -706,6 +843,12 @@ const clearFirestore = async () => {
                 </div>
               ))}
             </div>
+          </div>
+        ) : (
+          <div className="max-w-4xl mx-auto py-20 text-center text-zinc-400">
+            <p className="text-xl font-semibold">
+              Please select a page or create a new one.
+            </p>
           </div>
         )}
       </main>
@@ -881,6 +1024,58 @@ const clearFirestore = async () => {
               <button
                 onClick={handleConfirmDelete}
                 className="bg-red-500 text-white px-4 py-3 rounded-xl"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPageDeleteModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-2 sm:p-4 z-50">
+          <div className="bg-zinc-900 w-full max-w-md rounded-3xl p-6 space-y-4 border border-zinc-800">
+            <h2 className="text-2xl font-bold">Delete Page</h2>
+
+            <p className="text-zinc-300">Type "DELETE" to confirm deletion of this page.</p>
+
+            <input
+              value={pageDeleteConfirmInput}
+              onChange={(e) => setPageDeleteConfirmInput(e.target.value)}
+              placeholder="Type DELETE to confirm"
+              className="w-full rounded-2xl border border-zinc-700 bg-zinc-800 px-4 py-3 text-center outline-none focus:border-white"
+            />
+
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  setShowPageDeleteModal(false);
+                  setPageToDeleteId(null);
+                  setPageDeleteConfirmInput("");
+                }}
+                className="bg-zinc-700 px-4 py-3 rounded-xl"
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={async () => {
+                  if (!pageToDeleteId) return;
+                  try {
+                    await deletePageFromFirestore(pageToDeleteId);
+                  } catch (err) {
+                    console.error(err);
+                  }
+
+                  setPages((prev) => prev.filter((pp) => pp.id !== pageToDeleteId));
+                  if (selectedPage === pageToDeleteId) setSelectedPage(null);
+
+                  setShowPageDeleteModal(false);
+                  setPageToDeleteId(null);
+                  setPageDeleteConfirmInput("");
+                }}
+                disabled={pageDeleteConfirmInput !== "DELETE"}
+                className="bg-red-500 text-white px-4 py-3 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Delete
               </button>

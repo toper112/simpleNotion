@@ -66,8 +66,8 @@ export default function TaskList({
             <select
               value={task.uploadStatus || "Not Uploaded"}
               onChange={(event) => onUploadStatusChange(task.id, event.target.value)}
-              disabled={!canEdit}
-              className={`ml-2 px-3 py-1 rounded-md bg-zinc-800 border border-zinc-700 text-sm ${
+              disabled={!canEdit || task.status !== "DONE"}
+              className={`ml-2 px-3 py-1 rounded-md bg-zinc-800 border border-zinc-700 text-sm disabled:opacity-80 disabled:cursor-not-allowed ${
                 task.uploadStatus === "Uploaded" ? "text-emerald-400" : "text-zinc-300"
               }`}
             >

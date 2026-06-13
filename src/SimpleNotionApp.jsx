@@ -239,7 +239,12 @@ export default function SimpleNotionApp() {
               ...page,
               tasks: page.tasks.map((task) =>
                 task.id === taskId
-                  ? { ...task, status: value, done: value === "DONE" }
+                  ? {
+                      ...task,
+                      status: value,
+                      done: value === "DONE",
+                      uploadStatus: value === "DONE" ? task.uploadStatus : "Not Uploaded",
+                    }
                   : task
               ),
             }
@@ -294,6 +299,7 @@ export default function SimpleNotionApp() {
                       ...task,
                       done: checked,
                       status: checked ? "DONE" : "NOT STARTED",
+                      uploadStatus: checked ? task.uploadStatus : "Not Uploaded",
                     }
                   : task
               ),

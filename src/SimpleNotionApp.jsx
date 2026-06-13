@@ -184,6 +184,25 @@ export default function SimpleNotionApp() {
 
     const isEdit = Boolean(taskForm.id);
 
+    // Check if edit has meaningful changes (not just whitespace)
+    if (isEdit) {
+      const currentPage = pages.find((page) => page.id === selectedPage);
+      const originalTask = currentPage?.tasks.find((task) => task.id === taskForm.id);
+      
+      if (originalTask) {
+        const titleChanged = taskForm.title.trim() !== originalTask.title.trim();
+        const noteChanged = taskForm.note.trim() !== originalTask.note.trim();
+        const descriptionChanged = taskForm.description.trim() !== originalTask.description.trim();
+        
+        // If no meaningful changes, just close the modal without saving
+        if (!titleChanged && !noteChanged && !descriptionChanged) {
+          setIsTaskModalOpen(false);
+          setTaskForm(emptyTaskForm);
+          return;
+        }
+      }
+    }
+
     setPages((previousPages) => {
       const nextPages = previousPages.map((page) => {
         if (page.id !== selectedPage) return page;
@@ -372,7 +391,12 @@ export default function SimpleNotionApp() {
   };
 
   const handleEditTask = (task) => {
-    setTaskForm(task);
+    setTaskForm({
+      ...task,
+      done: false,
+      status: "NOT STARTED",
+      uploadStatus: "Not Uploaded",
+    });
     setIsViewModalOpen(false);
     setIsTaskModalOpen(true);
   };

@@ -23,18 +23,6 @@ export default function TaskModal({ taskForm, onChangeTaskForm, onCancel, onSave
           className="w-full min-h-[250px] md:min-h-[320px] p-3 bg-zinc-800 rounded-xl text-sm sm:text-base"
         />
 
-        <div className="w-full">
-          <label className="mb-2 block text-sm text-zinc-300">Upload Status</label>
-          <select
-            value={taskForm.uploadStatus ?? "Not Uploaded"}
-            onChange={(event) => onChangeTaskForm({ ...taskForm, uploadStatus: event.target.value })}
-            className="w-full rounded-2xl border border-zinc-700 bg-zinc-800 px-4 py-3 text-sm outline-none focus:border-white"
-          >
-            <option value="Not Uploaded">Not Uploaded</option>
-            <option value="Uploaded">Uploaded</option>
-          </select>
-        </div>
-
         <div className="flex justify-end gap-2">
           <button onClick={onCancel} className="bg-zinc-700 px-4 py-3 rounded-xl">
             Cancel

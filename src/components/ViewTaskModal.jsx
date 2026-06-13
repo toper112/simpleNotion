@@ -1,0 +1,77 @@
+export default function ViewTaskModal({ selectedTask, onClose, onEdit, canEdit }) {
+  if (!selectedTask) return null;
+
+  const renderWithLinks = (text) => {
+    if (!text) return null;
+
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+
+    return text.split(urlRegex).map((part, index) => {
+      if (urlRegex.test(part)) {
+        return (
+          <a
+            key={index}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-400 underline break-all"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {part}
+          </a>
+        );
+      }
+
+      return <span key={index}>{part}</span>;
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-2 sm:p-4 z-50" onClick={onClose}>
+      <div
+        className="bg-zinc-900 w-full sm:w-[90vw] md:w-[70vw] h-[90vh] md:h-[70vh] overflow-y-auto rounded-2xl p-4 sm:p-6"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-6 break-words">
+          {selectedTask.title}
+        </h2>
+
+        <div className="mb-4">
+          <h3 className="text-xl sm:text-2xl uppercase tracking-widest text-zinc-500 mb-1">Note:</h3>
+          <div className="text-zinc-200 whitespace-pre-wrap leading-relaxed border border-zinc-800 rounded-xl p-3 break-words">
+            {renderWithLinks(selectedTask.note)}
+          </div>
+        </div>
+
+        <div className="mb-2">
+          <h3 className="text-xl sm:text-2xl uppercase tracking-widest text-zinc-500 mb-2">Details:</h3>
+          <div className="text-zinc-200 whitespace-pre-wrap leading-relaxed border border-zinc-800 rounded-xl p-3 break-words">
+            {renderWithLinks(selectedTask.description)}
+          </div>
+        </div>
+      </div>
+
+      {canEdit && (
+        <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6">
+          <button
+            onClick={() => onEdit(selectedTask)}
+            className="bg-white text-black px-4 sm:px-5 py-3 rounded-xl shadow-lg active:scale-95 transition"
+          >
+            Edit
+          </button>
+        </div>
+      )}
+
+      {!canEdit && (
+        <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6">
+          <button
+            onClick={onClose}
+            className="bg-amber-500 text-black px-4 sm:px-5 py-3 rounded-xl shadow-lg active:scale-95 transition"
+          >
+            Verify to Edit
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}

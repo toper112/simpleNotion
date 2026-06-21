@@ -20,6 +20,8 @@ export const createDefaultPage = () => ({
   content: "# Welcome\n\nStart writing your tasks here...",
   createdAt: Date.now(),
   updatedAt: Date.now(),
+  createdBy: null,
+  assignedTo: [],
   tasks: [
     {
       id: createId(),
@@ -29,6 +31,7 @@ export const createDefaultPage = () => ({
       done: false,
       createdAt: Date.now(),
       status: "NOT STARTED",
+      assignedTo: null,
     },
   ],
 });

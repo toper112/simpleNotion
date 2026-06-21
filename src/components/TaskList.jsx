@@ -1,12 +1,20 @@
 export default function TaskList({
   tasks,
   canEdit,
+  users = [],
   onViewTask,
   onToggleDone,
   onStatusChange,
   onUploadStatusChange,
   onConfirmDelete,
+  onAssignTask,
 }) {
+  const getUserName = (userId) => {
+    if (!userId) return "Unassigned";
+    const user = users.find((u) => u.uid === userId);
+    return user ? user.name || user.email : "Unknown";
+  };
+
   if (!tasks || tasks.length === 0) {
     return (
       <div className="text-zinc-400 py-8 text-center rounded-2xl bg-zinc-950 border border-zinc-800">
@@ -45,6 +53,25 @@ export default function TaskList({
                 {task.note?.length > 80 ? `${task.note.slice(0, 80)}...` : task.note}
               </div>
             </div>
+
+            {canEdit && (
+              <select
+                value={task.assignedTo || ""}
+                onChange={(event) => onAssignTask(task.id, event.target.value)}
+                className="px-3 py-1 rounded-md bg-zinc-800 border border-zinc-700 text-sm"
+              >
+                <option value="">Unassigned</option>
+                {users.map((user) => (
+                  <option key={user.uid} value={user.uid}>
+                    {user.name || user.email}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {!canEdit && (
+              <div className="text-xs text-zinc-500">Assigned: {getUserName(task.assignedTo)}</div>
+            )}
 
             <select
               value={task.status || "NOT STARTED"}

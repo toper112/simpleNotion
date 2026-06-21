@@ -1,4 +1,4 @@
-export default function TaskModal({ taskForm, onChangeTaskForm, onCancel, onSave }) {
+export default function TaskModal({ taskForm, onChangeTaskForm, onCancel, onSave, users = [] }) {
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-2 sm:p-4 z-50">
       <div className="bg-zinc-900 w-full sm:w-[90vw] md:w-[70vw] h-[95vh] md:h-[70vh] overflow-y-auto rounded-2xl p-4 sm:p-6 space-y-3">
@@ -8,6 +8,19 @@ export default function TaskModal({ taskForm, onChangeTaskForm, onCancel, onSave
           onChange={(event) => onChangeTaskForm({ ...taskForm, title: event.target.value })}
           className="w-full p-3 bg-zinc-800 rounded-xl"
         />
+
+        <select
+          value={taskForm.assignedTo || ""}
+          onChange={(event) => onChangeTaskForm({ ...taskForm, assignedTo: event.target.value })}
+          className="w-full p-3 bg-zinc-800 rounded-xl text-sm"
+        >
+          <option value="">Assign to user...</option>
+          {users.map((user) => (
+            <option key={user.uid} value={user.uid}>
+              {user.name || user.email}
+            </option>
+          ))}
+        </select>
 
         <textarea
           placeholder="Note"

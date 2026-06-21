@@ -1,6 +1,7 @@
 import { db } from "./firebase";
 import { collection, doc, onSnapshot, setDoc } from "firebase/firestore";
 import { useEffect, useMemo, useState } from "react";
+import { useAuth } from "./AuthContext";
 import Sidebar from "./components/Sidebar";
 import PageEditor from "./components/PageEditor";
 import TaskList from "./components/TaskList";
@@ -8,7 +9,6 @@ import TaskModal from "./components/TaskModal";
 import ViewTaskModal from "./components/ViewTaskModal";
 import TaskDeleteModal from "./components/TaskDeleteModal";
 import PageDeleteModal from "./components/PageDeleteModal";
-import CodeModal from "./components/CodeModal";
 import {
   createDefaultPage,
   createId,
@@ -20,19 +20,16 @@ import {
   deletePageFromFirestore,
 } from "./utils/firestore";
 
-const CORRECT_CODE = "1126";
-const CODE_AUTH_KEY = "simple-notion-code-auth";
 const pagesCollection = collection(db, "notionPages");
+const usersCollection = collection(db, "users");
 
 export default function SimpleNotionApp() {
+  const { profile, logout } = useAuth();
   const [pages, setPages] = useState([]);
+  const [users, setUsers] = useState([]);
   const [selectedPage, setSelectedPage] = useState(null);
   const [newPageTitle, setNewPageTitle] = useState("");
   const [isLoaded, setIsLoaded] = useState(false);
-  const [isCodeAuthenticated, setIsCodeAuthenticated] = useState(false);
-  const [showCodeModal, setShowCodeModal] = useState(false);
-  const [codeInput, setCodeInput] = useState("");
-  const [codeError, setCodeError] = useState("");
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -44,10 +41,14 @@ export default function SimpleNotionApp() {
   const [pageDeleteConfirmInput, setPageDeleteConfirmInput] = useState("");
 
   useEffect(() => {
-    const savedAuth = sessionStorage.getItem(CODE_AUTH_KEY);
-    if (savedAuth === "true") {
-      setIsCodeAuthenticated(true);
-    }
+    const unsubscribe = onSnapshot(
+      usersCollection,
+      (snapshot) => {
+        setUsers(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+      },
+      (err) => console.error("Failed to load users:", err)
+    );
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -91,51 +92,43 @@ export default function SimpleNotionApp() {
   }, []);
 
   const currentPage = useMemo(
-    () => pages.find((page) => page.id === selectedPage) || null,
-    [pages, selectedPage]
+    () => {
+      const page = pages.find((page) => page.id === selectedPage);
+      if (!page) return null;
+      if (profile?.role === "admin") return page;
+      return !page.assignedTo || page.assignedTo.includes(profile?.uid) ? page : null;
+    },
+    [pages, selectedPage, profile]
   );
 
-  const sortedTasks = useMemo(
-    () =>
-      currentPage
-        ? [...currentPage.tasks].sort((a, b) => b.createdAt - a.createdAt)
-        : [],
-    [currentPage]
-  );
+  const sortedTasks = useMemo(() => {
+    if (!currentPage) return [];
+
+    const availableTasks = profile?.role === "admin"
+      ? currentPage.tasks
+      : currentPage.tasks.filter((task) => task.assignedTo === profile?.uid);
+
+    return [...availableTasks].sort((a, b) => b.createdAt - a.createdAt);
+  }, [currentPage, profile]);
 
   const pagesSorted = useMemo(
-    () =>
-      [...pages].sort(
-        (a, b) =>
-          (b.updatedAt || b.createdAt || 0) -
-          (a.updatedAt || a.createdAt || 0)
-      ),
+    () => [...pages].sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt)),
     [pages]
   );
 
-  const verifyCode = () => {
-    if (codeInput.trim() === CORRECT_CODE) {
-      sessionStorage.setItem(CODE_AUTH_KEY, "true");
-      setIsCodeAuthenticated(true);
-      setCodeError("");
-      setCodeInput("");
-      setShowCodeModal(false);
-    } else {
-      setCodeError("Invalid code. Preview only.");
-      setCodeInput("");
-    }
-  };
+  const pagesFiltered = useMemo(() => {
+    if (profile?.role === "admin") return pagesSorted;
+    
+    // For non-admin users, only show pages where they have tasks
+    return pagesSorted.filter((page) =>
+      page.tasks?.some((task) => task.assignedTo === profile?.uid)
+    );
+  }, [pagesSorted, profile]);
 
-  const checkCodeBeforeCRUD = () => {
-    if (!isCodeAuthenticated) {
-      setShowCodeModal(true);
-      return false;
-    }
-    return true;
-  };
+  const canEdit = profile?.role === "admin";
 
   const createPage = () => {
-    if (!checkCodeBeforeCRUD()) return;
+    if (!canEdit) return;
     if (!newPageTitle.trim()) return;
 
     const page = {
@@ -144,6 +137,8 @@ export default function SimpleNotionApp() {
       content: "",
       createdAt: Date.now(),
       updatedAt: Date.now(),
+      createdBy: profile?.uid || null,
+      assignedTo: profile?.role === "admin" ? [] : [profile?.uid],
       tasks: [],
     };
 
@@ -154,7 +149,7 @@ export default function SimpleNotionApp() {
   };
 
   const updatePage = (field, value) => {
-    if (!checkCodeBeforeCRUD()) return;
+    if (!canEdit) return;
 
     setPages((previousPages) => {
       const nextPages = previousPages.map((page) =>
@@ -173,13 +168,13 @@ export default function SimpleNotionApp() {
   };
 
   const addTask = () => {
-    if (!checkCodeBeforeCRUD()) return;
+    if (!canEdit) return;
     setTaskForm(emptyTaskForm);
     setIsTaskModalOpen(true);
   };
 
   const saveTask = () => {
-    if (!checkCodeBeforeCRUD()) return;
+    if (!canEdit) return;
     if (!taskForm.title.trim() || !selectedPage) return;
 
     const isEdit = Boolean(taskForm.id);
@@ -230,6 +225,7 @@ export default function SimpleNotionApp() {
               done: false,
               uploadStatus: taskForm.uploadStatus || "Not Uploaded",
               createdAt: Date.now(),
+              assignedTo: taskForm.assignedTo || null,
             },
           ],
         };
@@ -248,7 +244,7 @@ export default function SimpleNotionApp() {
   };
 
   const handleStatusChange = (taskId, value) => {
-    if (!checkCodeBeforeCRUD()) return;
+    if (!canEdit) return;
 
     setPages((previousPages) => {
       const originalPage = previousPages.find((page) => page.id === selectedPage);
@@ -280,7 +276,7 @@ export default function SimpleNotionApp() {
   };
 
   const handleUploadStatusChange = (taskId, value) => {
-    if (!checkCodeBeforeCRUD()) return;
+    if (!canEdit) return;
 
     setPages((previousPages) => {
       const nextPages = previousPages.map((page) =>
@@ -304,7 +300,7 @@ export default function SimpleNotionApp() {
   };
 
   const handleCheckboxChange = (taskId, checked) => {
-    if (!checkCodeBeforeCRUD()) return;
+    if (!canEdit) return;
 
     setPages((previousPages) => {
       const originalPage = previousPages.find((page) => page.id === selectedPage);
@@ -336,7 +332,7 @@ export default function SimpleNotionApp() {
   };
 
   const deleteTask = (taskId) => {
-    if (!checkCodeBeforeCRUD()) return;
+    if (!canEdit) return;
 
     setPages((previousPages) => {
       const nextPages = previousPages.map((page) =>
@@ -359,7 +355,7 @@ export default function SimpleNotionApp() {
   };
 
   const confirmDeleteTask = (taskId) => {
-    if (!checkCodeBeforeCRUD()) return;
+    if (!canEdit) return;
     setDeleteTaskId(taskId);
     setIsDeleteModalOpen(true);
   };
@@ -375,6 +371,33 @@ export default function SimpleNotionApp() {
   const handleCancelDelete = () => {
     setDeleteTaskId(null);
     setIsDeleteModalOpen(false);
+  };
+
+  const handleAssignTask = (taskId, userId) => {
+    if (!canEdit) return;
+
+    setPages((previousPages) => {
+      const nextPages = previousPages.map((page) =>
+        page.id === selectedPage
+          ? {
+              ...page,
+              updatedAt: Date.now(),
+              tasks: page.tasks.map((task) =>
+                task.id === taskId
+                  ? { ...task, assignedTo: userId || null }
+                  : task
+              ),
+            }
+          : page
+      );
+
+      const updatedPage = nextPages.find((page) => page.id === selectedPage);
+      if (updatedPage) {
+        savePageToFirestore(updatedPage);
+      }
+
+      return nextPages;
+    });
   };
 
   const handleNewPageKeyDown = (event) => {
@@ -428,11 +451,6 @@ export default function SimpleNotionApp() {
     setPageDeleteConfirmInput("");
   };
 
-  const handleAuthLock = () => {
-    sessionStorage.removeItem(CODE_AUTH_KEY);
-    setIsCodeAuthenticated(false);
-  };
-
   if (!isLoaded) {
     return null;
   }
@@ -440,48 +458,41 @@ export default function SimpleNotionApp() {
   return (
     <div className="h-screen flex flex-col md:flex-row bg-zinc-950 text-white overflow-hidden">
       <Sidebar
-        pagesSorted={pagesSorted}
+        pagesSorted={pagesFiltered}
         selectedPage={selectedPage}
         newPageTitle={newPageTitle}
-        isCodeAuthenticated={isCodeAuthenticated}
+        canEdit={canEdit}
+        isAdmin={profile?.role === "admin"}
+        profile={profile}
         onSelectPage={handleSelectPage}
         onCreatePage={createPage}
         onNewPageKeyDown={handleNewPageKeyDown}
         onRequestDeletePage={requestDeletePage}
-        onShowCodeModal={() => setShowCodeModal(true)}
-        onLock={handleAuthLock}
         onChangeNewPageTitle={setNewPageTitle}
+        onLogout={logout}
         formatPageDate={formatPageDate}
       />
 
       <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-10">
         <PageEditor
           currentPage={currentPage}
-          canEdit={isCodeAuthenticated}
+          canEdit={canEdit}
           onUpdatePage={updatePage}
           onAddTask={addTask}
         >
           <TaskList
             tasks={sortedTasks}
-            canEdit={isCodeAuthenticated}
+            canEdit={canEdit}
+            users={users}
             onViewTask={handleViewTask}
             onToggleDone={handleCheckboxChange}
             onStatusChange={handleStatusChange}
             onUploadStatusChange={handleUploadStatusChange}
             onConfirmDelete={confirmDeleteTask}
+            onAssignTask={handleAssignTask}
           />
         </PageEditor>
       </main>
-
-      {showCodeModal && (
-        <CodeModal
-          codeInput={codeInput}
-          codeError={codeError}
-          onChangeCodeInput={setCodeInput}
-          onVerify={verifyCode}
-          onCancel={() => setShowCodeModal(false)}
-        />
-      )}
 
       {isTaskModalOpen && (
         <TaskModal
@@ -489,6 +500,7 @@ export default function SimpleNotionApp() {
           onChangeTaskForm={handleUpdateTaskForm}
           onCancel={() => setIsTaskModalOpen(false)}
           onSave={saveTask}
+          users={users}
         />
       )}
 
@@ -497,7 +509,7 @@ export default function SimpleNotionApp() {
           selectedTask={selectedTask}
           onClose={() => setIsViewModalOpen(false)}
           onEdit={handleEditTask}
-          canEdit={isCodeAuthenticated}
+          canEdit={canEdit}
         />
       )}
 

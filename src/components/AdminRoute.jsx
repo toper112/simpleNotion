@@ -1,4 +1,5 @@
 import { Navigate, useLocation } from "react-router-dom";
+import UnauthorizedPage from "./UnauthorizedPage";
 import { useAuth } from "../AuthContext";
 
 export default function AdminRoute({ children }) {
@@ -22,7 +23,7 @@ export default function AdminRoute({ children }) {
   }
 
   if (profile?.role !== "admin") {
-    return <Navigate to="/unauthorized" replace />;
+    return <UnauthorizedPage />;
   }
 
   return children;

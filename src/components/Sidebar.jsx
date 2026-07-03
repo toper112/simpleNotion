@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import NotificationPanel from "./NotificationPanel";
 
 export default function Sidebar({
   pagesSorted,
@@ -14,7 +15,16 @@ export default function Sidebar({
   onChangeNewPageTitle,
   onLogout,
   formatPageDate,
+  notifications = [],
+  onNotificationTaskClick,
+  pagesWithUnviewedNotifications = new Set(),
+  onMarkPageNotificationsAsViewed,
 }) {
+  const handleSelectPage = (pageId) => {
+    onSelectPage(pageId);
+    onMarkPageNotificationsAsViewed(pageId);
+  };
+
   return (
     <aside className="w-full md:w-80 border-b md:border-b-0 md:border-r border-zinc-800 bg-zinc-900 p-4 flex flex-col max-h-[40vh] md:max-h-full">
       <div className="mb-6 flex items-center justify-between gap-2">
@@ -62,12 +72,17 @@ export default function Sidebar({
                 : "bg-zinc-800 border-zinc-700 hover:bg-zinc-700"
             }`}
           >
-            <div className="flex items-center justify-between" onClick={() => onSelectPage(page.id)}>
-              <div className="flex-1 min-w-0">
-                <span className="truncate font-medium block">{page.title}</span>
-                <span className="text-xs text-zinc-400 block mt-1">
-                  {formatPageDate(page.updatedAt || page.createdAt)}
-                </span>
+            <div className="flex items-center justify-between" onClick={() => handleSelectPage(page.id)}>
+              <div className="flex-1 min-w-0 flex items-center gap-2">
+                <div className="flex-1 min-w-0">
+                  <span className="truncate font-medium block">{page.title}</span>
+                  <span className="text-xs text-zinc-400 block mt-1">
+                    {formatPageDate(page.updatedAt || page.createdAt)}
+                  </span>
+                </div>
+                {pagesWithUnviewedNotifications.has(page.id) && (
+                  <div className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0"></div>
+                )}
               </div>
 
               {canEdit && isAdmin && (
@@ -92,6 +107,8 @@ export default function Sidebar({
             {canEdit ? "Admin Mode" : "Read Only"}
           </span>
         </div>
+
+        {isAdmin && <NotificationPanel notifications={notifications} onTaskClick={onNotificationTaskClick} />}
 
         {isAdmin && (
           <Link

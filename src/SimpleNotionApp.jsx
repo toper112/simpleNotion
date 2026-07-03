@@ -39,6 +39,31 @@ export default function SimpleNotionApp() {
   const [showPageDeleteModal, setShowPageDeleteModal] = useState(false);
   const [pageToDeleteId, setPageToDeleteId] = useState(null);
   const [pageDeleteConfirmInput, setPageDeleteConfirmInput] = useState("");
+  const [viewedNotifications, setViewedNotificationsState] = useState(() => {
+    // Load viewed notifications from localStorage on mount
+    try {
+      const stored = localStorage.getItem("viewedNotifications");
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch (e) {
+      return new Set();
+    }
+  });
+
+  // Persist viewed notifications to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem("viewedNotifications", JSON.stringify(Array.from(viewedNotifications)));
+    } catch (e) {
+      console.error("Failed to persist notifications:", e);
+    }
+  }, [viewedNotifications]);
+
+  const setViewedNotifications = (updateFn) => {
+    setViewedNotificationsState((prev) => {
+      const next = typeof updateFn === "function" ? updateFn(prev) : updateFn;
+      return next;
+    });
+  };
 
   useEffect(() => {
     const unsubscribe = onSnapshot(
@@ -96,7 +121,9 @@ export default function SimpleNotionApp() {
       const page = pages.find((page) => page.id === selectedPage);
       if (!page) return null;
       if (profile?.role === "admin") return page;
-      return !page.assignedTo || page.assignedTo.includes(profile?.uid) ? page : null;
+      // For non-admin users, allow viewing page if they have tasks assigned
+      const hasAssignedTask = page.tasks?.some((task) => task.assignedTo === profile?.uid);
+      return hasAssignedTask ? page : null;
     },
     [pages, selectedPage, profile]
   );
@@ -126,6 +153,64 @@ export default function SimpleNotionApp() {
   }, [pagesSorted, profile]);
 
   const canEdit = profile?.role === "admin";
+
+  const notifications = useMemo(() => {
+    if (profile?.role === "admin") {
+      // Admin sees notifications for newly uploaded tasks that have not been viewed by admin.
+      const notifs = [];
+      pages.forEach((page) => {
+        page.tasks?.forEach((task) => {
+          if (task.uploadStatus === "Uploaded" && !task.uploadedViewedByAdmin) {
+            notifs.push({
+              id: `${page.id}-${task.id}`,
+              pageId: page.id,
+              pageName: page.title,
+              taskId: task.id,
+              title: task.title,
+              task: task,
+              type: "uploaded",
+            });
+          }
+        });
+      });
+      return notifs;
+    } else {
+      // Users see notifications for newly assigned tasks that they have not opened yet.
+      const notifs = [];
+      pages.forEach((page) => {
+        page.tasks?.forEach((task) => {
+          if (task.assignedTo === profile?.uid && !task.viewedByAssignedUser) {
+            notifs.push({
+              id: `${page.id}-${task.id}`,
+              pageId: page.id,
+              pageName: page.title,
+              taskId: task.id,
+              title: task.title,
+              task: task,
+              type: "assigned",
+            });
+          }
+        });
+      });
+      return notifs;
+    }
+  }, [pages, profile]);
+
+  const pagesWithUnviewedNotifications = useMemo(() => {
+    const pageIds = new Set();
+    notifications.forEach((notif) => {
+      pageIds.add(notif.pageId);
+    });
+    return pageIds;
+  }, [notifications]);
+
+  const handleCloseViewModal = () => {
+    if (selectedTask && selectedPage) {
+      const notifId = `${selectedPage}-${selectedTask.id}`;
+      setViewedNotifications((prev) => new Set([...prev, notifId]));
+    }
+    setIsViewModalOpen(false);
+  };
 
   const createPage = () => {
     if (!canEdit) return;
@@ -226,6 +311,7 @@ export default function SimpleNotionApp() {
               uploadStatus: taskForm.uploadStatus || "Not Uploaded",
               createdAt: Date.now(),
               assignedTo: taskForm.assignedTo || null,
+              viewedByAssignedUser: false,
             },
           ],
         };
@@ -243,8 +329,18 @@ export default function SimpleNotionApp() {
     setTaskForm(emptyTaskForm);
   };
 
+  // Helper to check if user can edit a specific task (admin or task is assigned to them)
+  const canUserEditTask = (taskId) => {
+    if (canEdit) return true; // Admin can edit any task
+    
+    // For non-admin users, check if task is assigned to them
+    const page = pages.find((p) => p.id === selectedPage);
+    const task = page?.tasks.find((t) => t.id === taskId);
+    return task?.assignedTo === profile?.uid;
+  };
+
   const handleStatusChange = (taskId, value) => {
-    if (!canEdit) return;
+    if (!canUserEditTask(taskId)) return;
 
     setPages((previousPages) => {
       const originalPage = previousPages.find((page) => page.id === selectedPage);
@@ -276,7 +372,7 @@ export default function SimpleNotionApp() {
   };
 
   const handleUploadStatusChange = (taskId, value) => {
-    if (!canEdit) return;
+    if (!canUserEditTask(taskId)) return;
 
     setPages((previousPages) => {
       const nextPages = previousPages.map((page) =>
@@ -284,7 +380,13 @@ export default function SimpleNotionApp() {
           ? {
               ...page,
               tasks: page.tasks.map((task) =>
-                task.id === taskId ? { ...task, uploadStatus: value } : task
+                task.id === taskId
+                  ? {
+                      ...task,
+                      uploadStatus: value,
+                      uploadedViewedByAdmin: value === "Uploaded" ? false : task.uploadedViewedByAdmin,
+                    }
+                  : task
               ),
             }
           : page
@@ -384,7 +486,12 @@ export default function SimpleNotionApp() {
               updatedAt: Date.now(),
               tasks: page.tasks.map((task) =>
                 task.id === taskId
-                  ? { ...task, assignedTo: userId || null }
+                  ? {
+                      ...task,
+                      assignedTo: userId || null,
+                      viewedByAssignedUser:
+                        task.assignedTo !== userId ? false : task.viewedByAssignedUser,
+                    }
                   : task
               ),
             }
@@ -407,10 +514,117 @@ export default function SimpleNotionApp() {
   };
 
   const handleSelectPage = (pageId) => setSelectedPage(pageId);
+  const handleNotificationTaskClick = (pageId, taskData) => {
+    setSelectedPage(pageId);
+    setSelectedTask(taskData.task);
+    setIsViewModalOpen(true);
+
+    if (profile?.role === "admin" && taskData.task.uploadStatus === "Uploaded") {
+      markUploadedTaskViewedByAdmin(pageId, taskData.taskId);
+    }
+
+    if (profile?.role !== "admin" && taskData.task.assignedTo === profile?.uid) {
+      markAssignedTaskViewedByUser(taskData.taskId);
+    }
+  };
+  const markTaskNotificationsAsViewed = (pageId) => {
+    const page = pages.find((page) => page.id === pageId);
+    if (!page) return;
+
+    const updatedPage = {
+      ...page,
+      tasks: page.tasks.map((task) => {
+        if (profile?.role === "admin" && task.uploadStatus === "Uploaded") {
+          return { ...task, uploadedViewedByAdmin: true };
+        }
+        if (profile?.role !== "admin" && task.assignedTo === profile?.uid) {
+          return { ...task, viewedByAssignedUser: true };
+        }
+        return task;
+      }),
+    };
+
+    setPages((previousPages) => {
+      const nextPages = previousPages.map((page) =>
+        page.id === pageId ? updatedPage : page
+      );
+      savePageToFirestore(updatedPage);
+      return nextPages;
+    });
+  };
   const handleUpdateTaskForm = (nextForm) => setTaskForm(nextForm);
+  const markAssignedTaskViewedByUser = (taskId) => {
+    const page = pages.find((page) => page.id === selectedPage);
+    const task = page?.tasks.find((task) => task.id === taskId);
+    if (!task || task.assignedTo !== profile?.uid) return;
+    if (task.viewedByAssignedUser) return;
+
+    setPages((previousPages) => {
+      const nextPages = previousPages.map((page) =>
+        page.id === selectedPage
+          ? {
+              ...page,
+              tasks: page.tasks.map((task) =>
+                task.id === taskId
+                  ? { ...task, viewedByAssignedUser: true }
+                  : task
+              ),
+            }
+          : page
+      );
+
+      const updatedPage = nextPages.find((page) => page.id === selectedPage);
+      if (updatedPage) {
+        savePageToFirestore(updatedPage);
+      }
+
+      return nextPages;
+    });
+  };
+
+  const markUploadedTaskViewedByAdmin = (pageId, taskId) => {
+    const page = pages.find((page) => page.id === pageId);
+    const task = page?.tasks.find((task) => task.id === taskId);
+    if (!task || task.uploadStatus !== "Uploaded") return;
+    if (task.uploadedViewedByAdmin) return;
+
+    setPages((previousPages) => {
+      const nextPages = previousPages.map((page) =>
+        page.id === pageId
+          ? {
+              ...page,
+              tasks: page.tasks.map((task) =>
+                task.id === taskId
+                  ? { ...task, uploadedViewedByAdmin: true }
+                  : task
+              ),
+            }
+          : page
+      );
+
+      const updatedPage = nextPages.find((page) => page.id === pageId);
+      if (updatedPage) {
+        savePageToFirestore(updatedPage);
+      }
+
+      return nextPages;
+    });
+  };
+
   const handleViewTask = (task) => {
     setSelectedTask(task);
     setIsViewModalOpen(true);
+    // Mark notification as viewed if it exists
+    const notifId = `${selectedPage}-${task.id}`;
+    setViewedNotifications((prev) => new Set([...prev, notifId]));
+
+    if (profile?.role === "admin" && task.uploadStatus === "Uploaded") {
+      markUploadedTaskViewedByAdmin(selectedPage, task.id);
+    }
+
+    if (profile?.uid && task.assignedTo === profile.uid && profile.role !== "admin") {
+      markAssignedTaskViewedByUser(task.id);
+    }
   };
 
   const handleEditTask = (task) => {
@@ -471,6 +685,10 @@ export default function SimpleNotionApp() {
         onChangeNewPageTitle={setNewPageTitle}
         onLogout={logout}
         formatPageDate={formatPageDate}
+        notifications={notifications}
+        onNotificationTaskClick={handleNotificationTaskClick}
+        pagesWithUnviewedNotifications={pagesWithUnviewedNotifications}
+        onMarkPageNotificationsAsViewed={markTaskNotificationsAsViewed}
       />
 
       <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-10">
@@ -483,7 +701,10 @@ export default function SimpleNotionApp() {
           <TaskList
             tasks={sortedTasks}
             canEdit={canEdit}
+            profile={profile}
             users={users}
+            selectedPageId={selectedPage}
+            viewedNotifications={viewedNotifications}
             onViewTask={handleViewTask}
             onToggleDone={handleCheckboxChange}
             onStatusChange={handleStatusChange}
@@ -507,7 +728,7 @@ export default function SimpleNotionApp() {
       {isViewModalOpen && selectedTask && (
         <ViewTaskModal
           selectedTask={selectedTask}
-          onClose={() => setIsViewModalOpen(false)}
+          onClose={handleCloseViewModal}
           onEdit={handleEditTask}
           canEdit={canEdit}
         />

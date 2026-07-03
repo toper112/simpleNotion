@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import { collection, doc, getDocs, getFirestore, query, setDoc } from "firebase/firestore";
 import { db } from "../firebase";
 
 export default function AdminDashboard() {
+  const navigate = useNavigate();
   const { user, profile, logout, updateUserRole, disableUser } = useAuth();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -55,14 +57,19 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-zinc-950 text-white p-6">
       <div className="max-w-6xl mx-auto rounded-3xl border border-zinc-800 bg-zinc-900 p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
           <div>
             <h1 className="text-3xl font-bold">Admin Dashboard</h1>
             <p className="text-zinc-400">Manage users, roles, and account status.</p>
           </div>
-          <button onClick={logout} className="rounded-2xl bg-white px-4 py-3 text-black font-semibold">
-            Sign Out
-          </button>
+          <div className="flex gap-2">
+            <button onClick={() => navigate(-1)} className="rounded-2xl bg-zinc-700 px-4 py-3 text-white font-semibold hover:bg-zinc-600">
+              ← Back
+            </button>
+            <button onClick={logout} className="rounded-2xl bg-white px-4 py-3 text-black font-semibold">
+              Sign Out
+            </button>
+          </div>
         </div>
 
         {error && <div className="mb-4 rounded-2xl bg-red-500/10 px-4 py-3 text-red-200">{error}</div>}

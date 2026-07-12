@@ -12,6 +12,7 @@ export const emptyTaskForm = {
   note: "",
   description: "",
   uploadStatus: "Not Uploaded",
+  category: "Uncategorize",
 };
 
 export const createDefaultPage = () => ({
@@ -22,18 +23,8 @@ export const createDefaultPage = () => ({
   updatedAt: Date.now(),
   createdBy: null,
   assignedTo: [],
-  tasks: [
-    {
-      id: createId(),
-      title: "Create your first task",
-      note: "",
-      description: "",
-      done: false,
-      createdAt: Date.now(),
-      status: "NOT STARTED",
-      assignedTo: null,
-    },
-  ],
+  tabs: [],
+  tasks: [],
 });
 
 export const formatPageDate = (timestamp) =>

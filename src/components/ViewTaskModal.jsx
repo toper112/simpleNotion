@@ -36,6 +36,17 @@ export default function ViewTaskModal({ selectedTask, onClose, onEdit, canEdit }
           {selectedTask.title}
         </h2>
 
+        <div className="mb-3 flex flex-wrap gap-2">
+          <span className="rounded-full border border-zinc-700 px-3 py-1 text-sm text-zinc-300">
+            Category: {selectedTask.category || "Uncategorize"}
+          </span>
+          {selectedTask.assignedTo && (
+            <span className="rounded-full border border-zinc-700 px-3 py-1 text-sm text-zinc-300">
+              Assigned
+            </span>
+          )}
+        </div>
+
         <div className="mb-4">
           <h3 className="text-xl sm:text-2xl uppercase tracking-widest text-zinc-500 mb-1">Note:</h3>
           <div className="text-zinc-200 whitespace-pre-wrap leading-relaxed border border-zinc-800 rounded-xl p-3 break-words">

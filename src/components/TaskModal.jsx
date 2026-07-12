@@ -9,18 +9,30 @@ export default function TaskModal({ taskForm, onChangeTaskForm, onCancel, onSave
           className="w-full p-3 bg-zinc-800 rounded-xl"
         />
 
-        <select
-          value={taskForm.assignedTo || ""}
-          onChange={(event) => onChangeTaskForm({ ...taskForm, assignedTo: event.target.value })}
-          className="w-full p-3 bg-zinc-800 rounded-xl text-sm"
-        >
-          <option value="">Assign to user...</option>
-          {users.map((user) => (
-            <option key={user.uid} value={user.uid}>
-              {user.name || user.email}
-            </option>
-          ))}
-        </select>
+        <div className="grid gap-3 md:grid-cols-2">
+          <select
+            value={taskForm.assignedTo || ""}
+            onChange={(event) => onChangeTaskForm({ ...taskForm, assignedTo: event.target.value })}
+            className="w-full p-3 bg-zinc-800 rounded-xl text-sm"
+          >
+            <option value="">Assign to user...</option>
+            {users.map((user) => (
+              <option key={user.uid} value={user.uid}>
+                {user.name || user.email}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={taskForm.category || "Uncategorize"}
+            onChange={(event) => onChangeTaskForm({ ...taskForm, category: event.target.value })}
+            className="w-full p-3 bg-zinc-800 rounded-xl text-sm"
+          >
+            <option value="Uncategorize">Uncategorize</option>
+            <option value="Non-CTA">Non-CTA</option>
+            <option value="CTA">CTA</option>
+          </select>
+        </div>
 
         <textarea
           placeholder="Note"

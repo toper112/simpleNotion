@@ -28,7 +28,9 @@ export default function SimpleNotionApp() {
   const [pages, setPages] = useState([]);
   const [users, setUsers] = useState([]);
   const [selectedPage, setSelectedPage] = useState(null);
+  const [selectedTabId, setSelectedTabId] = useState(null);
   const [newPageTitle, setNewPageTitle] = useState("");
+  const [taskFilters, setTaskFilters] = useState({ category: "All", assigned: "All", upload: "All" });
   const [isLoaded, setIsLoaded] = useState(false);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
@@ -116,27 +118,79 @@ export default function SimpleNotionApp() {
     return () => unsubscribe();
   }, []);
 
+  const getPageTabs = (page) => {
+    if (!page) return [{ id: "legacy-tab", title: "Tab 1", tasks: [] }];
+
+    const existingTabs = Array.isArray(page.tabs) ? page.tabs : [];
+    const legacyTasks = Array.isArray(page.tasks) ? page.tasks : [];
+    const tasksInTabs = new Set(
+      existingTabs.flatMap((tab) => (tab.tasks || []).map((task) => task.id))
+    );
+    const orphanTasks = legacyTasks.filter((task) => !tasksInTabs.has(task.id));
+
+    if (existingTabs.length === 0) {
+      return [{ id: "legacy-tab", title: "Tab 1", tasks: orphanTasks }];
+    }
+
+    const tab1Index = existingTabs.findIndex(
+      (tab) => tab.title === "Tab 1" || tab.id === "legacy-tab"
+    );
+
+    if (tab1Index >= 0) {
+      return existingTabs.map((tab, index) =>
+        index === tab1Index
+          ? { ...tab, tasks: [...(tab.tasks || []), ...orphanTasks] }
+          : tab
+      );
+    }
+
+    return [
+      { id: "legacy-tab", title: "Tab 1", tasks: orphanTasks },
+      ...existingTabs,
+    ];
+  };
+
   const currentPage = useMemo(
     () => {
       const page = pages.find((page) => page.id === selectedPage);
       if (!page) return null;
       if (profile?.role === "admin") return page;
-      // For non-admin users, allow viewing page if they have tasks assigned
-      const hasAssignedTask = page.tasks?.some((task) => task.assignedTo === profile?.uid);
+      const hasAssignedTask = getPageTabs(page).some((tab) =>
+        (tab.tasks || []).some((task) => task.assignedTo === profile?.uid)
+      );
       return hasAssignedTask ? page : null;
     },
     [pages, selectedPage, profile]
   );
 
+  const activeTab = useMemo(() => {
+    if (!currentPage) return null;
+    const tabs = getPageTabs(currentPage);
+    if (!tabs.length) return null;
+    const selected = tabs.find((tab) => tab.id === selectedTabId) || tabs[0];
+    return selected;
+  }, [currentPage, selectedTabId]);
+
+  useEffect(() => {
+    if (!currentPage) return;
+    const tabs = getPageTabs(currentPage);
+    if (!tabs.length) return;
+    if (!selectedTabId || !tabs.some((tab) => tab.id === selectedTabId)) {
+      setSelectedTabId(tabs[0].id);
+    }
+  }, [currentPage, selectedTabId]);
+
+  const currentTabTasks = useMemo(() => {
+    if (!currentPage || !activeTab) return [];
+    const tasks = activeTab.tasks || [];
+    return profile?.role === "admin"
+      ? tasks
+      : tasks.filter((task) => task.assignedTo === profile?.uid);
+  }, [activeTab, currentPage, profile]);
+
   const sortedTasks = useMemo(() => {
-    if (!currentPage) return [];
-
-    const availableTasks = profile?.role === "admin"
-      ? currentPage.tasks
-      : currentPage.tasks.filter((task) => task.assignedTo === profile?.uid);
-
-    return [...availableTasks].sort((a, b) => b.createdAt - a.createdAt);
-  }, [currentPage, profile]);
+    return [...currentTabTasks].sort((a, b) => b.createdAt - a.createdAt);
+  }, [currentTabTasks]);
 
   const pagesSorted = useMemo(
     () => [...pages].sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt)),
@@ -145,10 +199,11 @@ export default function SimpleNotionApp() {
 
   const pagesFiltered = useMemo(() => {
     if (profile?.role === "admin") return pagesSorted;
-    
-    // For non-admin users, only show pages where they have tasks
+
     return pagesSorted.filter((page) =>
-      page.tasks?.some((task) => task.assignedTo === profile?.uid)
+      getPageTabs(page).some((tab) =>
+        (tab.tasks || []).some((task) => task.assignedTo === profile?.uid)
+      )
     );
   }, [pagesSorted, profile]);
 
@@ -156,40 +211,42 @@ export default function SimpleNotionApp() {
 
   const notifications = useMemo(() => {
     if (profile?.role === "admin") {
-      // Admin sees notifications for newly uploaded tasks that have not been viewed by admin.
       const notifs = [];
       pages.forEach((page) => {
-        page.tasks?.forEach((task) => {
-          if (task.uploadStatus === "Uploaded" && !task.uploadedViewedByAdmin) {
-            notifs.push({
-              id: `${page.id}-${task.id}`,
-              pageId: page.id,
-              pageName: page.title,
-              taskId: task.id,
-              title: task.title,
-              task: task,
-              type: "uploaded",
-            });
-          }
+        getPageTabs(page).forEach((tab) => {
+          (tab.tasks || []).forEach((task) => {
+            if (task.uploadStatus === "Uploaded" && !task.uploadedViewedByAdmin) {
+              notifs.push({
+                id: `${page.id}-${tab.id}-${task.id}`,
+                pageId: page.id,
+                pageName: page.title,
+                taskId: task.id,
+                title: task.title,
+                task: task,
+                type: "uploaded",
+              });
+            }
+          });
         });
       });
       return notifs;
     } else {
-      // Users see notifications for newly assigned tasks that they have not opened yet.
       const notifs = [];
       pages.forEach((page) => {
-        page.tasks?.forEach((task) => {
-          if (task.assignedTo === profile?.uid && !task.viewedByAssignedUser) {
-            notifs.push({
-              id: `${page.id}-${task.id}`,
-              pageId: page.id,
-              pageName: page.title,
-              taskId: task.id,
-              title: task.title,
-              task: task,
-              type: "assigned",
-            });
-          }
+        getPageTabs(page).forEach((tab) => {
+          (tab.tasks || []).forEach((task) => {
+            if (task.assignedTo === profile?.uid && !task.viewedByAssignedUser) {
+              notifs.push({
+                id: `${page.id}-${tab.id}-${task.id}`,
+                pageId: page.id,
+                pageName: page.title,
+                taskId: task.id,
+                title: task.title,
+                task: task,
+                type: "assigned",
+              });
+            }
+          });
         });
       });
       return notifs;
@@ -224,6 +281,7 @@ export default function SimpleNotionApp() {
       updatedAt: Date.now(),
       createdBy: profile?.uid || null,
       assignedTo: profile?.role === "admin" ? [] : [profile?.uid],
+      tabs: [{ id: createId(), title: "Tab 1", tasks: [] }],
       tasks: [],
     };
 
@@ -253,8 +311,8 @@ export default function SimpleNotionApp() {
   };
 
   const addTask = () => {
-    if (!canEdit) return;
-    setTaskForm(emptyTaskForm);
+    if (!canEdit || !activeTab) return;
+    setTaskForm({ ...emptyTaskForm, category: "Uncategorize" });
     setIsTaskModalOpen(true);
   };
 
@@ -267,7 +325,9 @@ export default function SimpleNotionApp() {
     // Check if edit has meaningful changes (not just whitespace)
     if (isEdit) {
       const currentPage = pages.find((page) => page.id === selectedPage);
-      const originalTask = currentPage?.tasks.find((task) => task.id === taskForm.id);
+      const originalTask = getPageTabs(currentPage)
+        .flatMap((tab) => tab.tasks || [])
+        .find((task) => task.id === taskForm.id);
       
       if (originalTask) {
         const titleChanged = taskForm.title.trim() !== originalTask.title.trim();
@@ -287,33 +347,47 @@ export default function SimpleNotionApp() {
       const nextPages = previousPages.map((page) => {
         if (page.id !== selectedPage) return page;
 
+        const tabs = getPageTabs(page).map((tab) =>
+          tab.id === activeTab?.id
+            ? {
+                ...tab,
+                tasks: isEdit
+                  ? (tab.tasks || []).map((task) =>
+                      task.id === taskForm.id ? { ...task, ...taskForm } : task
+                    )
+                  : [
+                      ...(tab.tasks || []),
+                      {
+                        id: createId(),
+                        title: taskForm.title,
+                        note: taskForm.note,
+                        description: taskForm.description,
+                        done: false,
+                        uploadStatus: taskForm.uploadStatus || "Not Uploaded",
+                        category: taskForm.category || "Uncategorize",
+                        createdAt: Date.now(),
+                        assignedTo: taskForm.assignedTo || null,
+                        viewedByAssignedUser: false,
+                      },
+                    ],
+              }
+            : tab
+        );
+
         if (isEdit) {
           return {
             ...page,
             updatedAt: Date.now(),
-            tasks: page.tasks.map((task) =>
-              task.id === taskForm.id ? { ...task, ...taskForm } : task
-            ),
+            tabs,
+            tasks: tabs.flatMap((tab) => tab.tasks),
           };
         }
 
         return {
           ...page,
           updatedAt: Date.now(),
-          tasks: [
-            ...page.tasks,
-            {
-              id: createId(),
-              title: taskForm.title,
-              note: taskForm.note,
-              description: taskForm.description,
-              done: false,
-              uploadStatus: taskForm.uploadStatus || "Not Uploaded",
-              createdAt: Date.now(),
-              assignedTo: taskForm.assignedTo || null,
-              viewedByAssignedUser: false,
-            },
-          ],
+          tabs,
+          tasks: tabs.flatMap((tab) => tab.tasks),
         };
       });
 
@@ -335,7 +409,9 @@ export default function SimpleNotionApp() {
     
     // For non-admin users, check if task is assigned to them
     const page = pages.find((p) => p.id === selectedPage);
-    const task = page?.tasks.find((t) => t.id === taskId);
+    const task = getPageTabs(page)
+      .flatMap((tab) => tab.tasks || [])
+      .find((t) => t.id === taskId);
     return task?.assignedTo === profile?.uid;
   };
 
@@ -344,11 +420,14 @@ export default function SimpleNotionApp() {
 
     setPages((previousPages) => {
       const originalPage = previousPages.find((page) => page.id === selectedPage);
-      const nextPages = previousPages.map((page) =>
-        page.id === selectedPage
+      const nextPages = previousPages.map((page) => {
+      if (page.id !== selectedPage) return page;
+
+      const updatedTabs = getPageTabs(page).map((tab) =>
+        tab.id === activeTab?.id
           ? {
-              ...page,
-              tasks: page.tasks.map((task) =>
+              ...tab,
+              tasks: (tab.tasks || []).map((task) =>
                 task.id === taskId
                   ? {
                       ...task,
@@ -359,8 +438,16 @@ export default function SimpleNotionApp() {
                   : task
               ),
             }
-          : page
+          : tab
       );
+
+      return {
+        ...page,
+        updatedAt: Date.now(),
+        tabs: updatedTabs,
+        tasks: updatedTabs.flatMap((tab) => tab.tasks || []),
+      };
+    });
 
       const updatedPage = nextPages.find((page) => page.id === selectedPage);
       if (updatedPage) {
@@ -375,11 +462,14 @@ export default function SimpleNotionApp() {
     if (!canUserEditTask(taskId)) return;
 
     setPages((previousPages) => {
-      const nextPages = previousPages.map((page) =>
-        page.id === selectedPage
+      const nextPages = previousPages.map((page) => {
+      if (page.id !== selectedPage) return page;
+
+      const updatedTabs = getPageTabs(page).map((tab) =>
+        tab.id === activeTab?.id
           ? {
-              ...page,
-              tasks: page.tasks.map((task) =>
+              ...tab,
+              tasks: (tab.tasks || []).map((task) =>
                 task.id === taskId
                   ? {
                       ...task,
@@ -389,8 +479,16 @@ export default function SimpleNotionApp() {
                   : task
               ),
             }
-          : page
+          : tab
       );
+
+      return {
+        ...page,
+        updatedAt: Date.now(),
+        tabs: updatedTabs,
+        tasks: updatedTabs.flatMap((tab) => tab.tasks || []),
+      };
+    });
 
       const updatedPage = nextPages.find((page) => page.id === selectedPage);
       if (updatedPage) {
@@ -406,11 +504,14 @@ export default function SimpleNotionApp() {
 
     setPages((previousPages) => {
       const originalPage = previousPages.find((page) => page.id === selectedPage);
-      const nextPages = previousPages.map((page) =>
-        page.id === selectedPage
+      const nextPages = previousPages.map((page) => {
+      if (page.id !== selectedPage) return page;
+
+      const updatedTabs = getPageTabs(page).map((tab) =>
+        tab.id === activeTab?.id
           ? {
-              ...page,
-              tasks: page.tasks.map((task) =>
+              ...tab,
+              tasks: (tab.tasks || []).map((task) =>
                 task.id === taskId
                   ? {
                       ...task,
@@ -421,8 +522,16 @@ export default function SimpleNotionApp() {
                   : task
               ),
             }
-          : page
+          : tab
       );
+
+      return {
+        ...page,
+        updatedAt: Date.now(),
+        tabs: updatedTabs,
+        tasks: updatedTabs.flatMap((tab) => tab.tasks || []),
+      };
+    });
 
       const updatedPage = nextPages.find((page) => page.id === selectedPage);
       if (updatedPage) {
@@ -442,7 +551,16 @@ export default function SimpleNotionApp() {
           ? {
               ...page,
               updatedAt: Date.now(),
-              tasks: page.tasks.filter((task) => task.id !== taskId),
+              tabs: getPageTabs(page).map((tab) =>
+                tab.id === activeTab?.id
+                  ? { ...tab, tasks: (tab.tasks || []).filter((task) => task.id !== taskId) }
+                  : tab
+              ),
+              tasks: getPageTabs(page).flatMap((tab) =>
+                tab.id === activeTab?.id
+                  ? (tab.tasks || []).filter((task) => task.id !== taskId)
+                  : tab.tasks
+              ),
             }
           : page
       );
@@ -479,12 +597,14 @@ export default function SimpleNotionApp() {
     if (!canEdit) return;
 
     setPages((previousPages) => {
-      const nextPages = previousPages.map((page) =>
-        page.id === selectedPage
+      const nextPages = previousPages.map((page) => {
+      if (page.id !== selectedPage) return page;
+
+      const updatedTabs = getPageTabs(page).map((tab) =>
+        tab.id === activeTab?.id
           ? {
-              ...page,
-              updatedAt: Date.now(),
-              tasks: page.tasks.map((task) =>
+              ...tab,
+              tasks: (tab.tasks || []).map((task) =>
                 task.id === taskId
                   ? {
                       ...task,
@@ -495,8 +615,16 @@ export default function SimpleNotionApp() {
                   : task
               ),
             }
-          : page
+          : tab
       );
+
+      return {
+        ...page,
+        updatedAt: Date.now(),
+        tabs: updatedTabs,
+        tasks: updatedTabs.flatMap((tab) => tab.tasks || []),
+      };
+    });
 
       const updatedPage = nextPages.find((page) => page.id === selectedPage);
       if (updatedPage) {
@@ -513,7 +641,14 @@ export default function SimpleNotionApp() {
     }
   };
 
-  const handleSelectPage = (pageId) => setSelectedPage(pageId);
+  const handleSelectPage = (pageId) => {
+    setSelectedPage(pageId);
+    const page = pages.find((entry) => entry.id === pageId);
+    const pageTabs = getPageTabs(page);
+    if (pageTabs.length) {
+      setSelectedTabId(pageTabs[0].id);
+    }
+  };
   const handleNotificationTaskClick = (pageId, taskData) => {
     setSelectedPage(pageId);
     setSelectedTask(taskData.task);
@@ -531,9 +666,10 @@ export default function SimpleNotionApp() {
     const page = pages.find((page) => page.id === pageId);
     if (!page) return;
 
-    const updatedPage = {
-      ...page,
-      tasks: page.tasks.map((task) => {
+    const pageTabs = getPageTabs(page);
+    const updatedTabs = pageTabs.map((tab) => ({
+      ...tab,
+      tasks: (tab.tasks || []).map((task) => {
         if (profile?.role === "admin" && task.uploadStatus === "Uploaded") {
           return { ...task, uploadedViewedByAdmin: true };
         }
@@ -542,6 +678,12 @@ export default function SimpleNotionApp() {
         }
         return task;
       }),
+    }));
+
+    const updatedPage = {
+      ...page,
+      tabs: updatedTabs,
+      tasks: updatedTabs.flatMap((tab) => tab.tasks),
     };
 
     setPages((previousPages) => {
@@ -555,23 +697,28 @@ export default function SimpleNotionApp() {
   const handleUpdateTaskForm = (nextForm) => setTaskForm(nextForm);
   const markAssignedTaskViewedByUser = (taskId) => {
     const page = pages.find((page) => page.id === selectedPage);
-    const task = page?.tasks.find((task) => task.id === taskId);
+    const task = getPageTabs(page).flatMap((tab) => tab.tasks || []).find((task) => task.id === taskId);
     if (!task || task.assignedTo !== profile?.uid) return;
     if (task.viewedByAssignedUser) return;
 
     setPages((previousPages) => {
-      const nextPages = previousPages.map((page) =>
-        page.id === selectedPage
-          ? {
-              ...page,
-              tasks: page.tasks.map((task) =>
-                task.id === taskId
-                  ? { ...task, viewedByAssignedUser: true }
-                  : task
-              ),
-            }
-          : page
-      );
+      const nextPages = previousPages.map((page) => {
+        if (page.id !== selectedPage) return page;
+
+        const updatedTabs = getPageTabs(page).map((tab) => ({
+          ...tab,
+          tasks: (tab.tasks || []).map((task) =>
+            task.id === taskId ? { ...task, viewedByAssignedUser: true } : task
+          ),
+        }));
+
+        return {
+          ...page,
+          updatedAt: Date.now(),
+          tabs: updatedTabs,
+          tasks: updatedTabs.flatMap((tab) => tab.tasks || []),
+        };
+      });
 
       const updatedPage = nextPages.find((page) => page.id === selectedPage);
       if (updatedPage) {
@@ -584,23 +731,28 @@ export default function SimpleNotionApp() {
 
   const markUploadedTaskViewedByAdmin = (pageId, taskId) => {
     const page = pages.find((page) => page.id === pageId);
-    const task = page?.tasks.find((task) => task.id === taskId);
+    const task = getPageTabs(page).flatMap((tab) => tab.tasks || []).find((task) => task.id === taskId);
     if (!task || task.uploadStatus !== "Uploaded") return;
     if (task.uploadedViewedByAdmin) return;
 
     setPages((previousPages) => {
-      const nextPages = previousPages.map((page) =>
-        page.id === pageId
-          ? {
-              ...page,
-              tasks: page.tasks.map((task) =>
-                task.id === taskId
-                  ? { ...task, uploadedViewedByAdmin: true }
-                  : task
-              ),
-            }
-          : page
-      );
+      const nextPages = previousPages.map((page) => {
+        if (page.id !== pageId) return page;
+
+        const updatedTabs = getPageTabs(page).map((tab) => ({
+          ...tab,
+          tasks: (tab.tasks || []).map((task) =>
+            task.id === taskId ? { ...task, uploadedViewedByAdmin: true } : task
+          ),
+        }));
+
+        return {
+          ...page,
+          updatedAt: Date.now(),
+          tabs: updatedTabs,
+          tasks: updatedTabs.flatMap((tab) => tab.tasks || []),
+        };
+      });
 
       const updatedPage = nextPages.find((page) => page.id === pageId);
       if (updatedPage) {
@@ -632,7 +784,8 @@ export default function SimpleNotionApp() {
       ...task,
       done: false,
       status: "NOT STARTED",
-      uploadStatus: "Not Uploaded",
+      uploadStatus: task.uploadStatus || "Not Uploaded",
+      category: task.category || "Uncategorize",
     });
     setIsViewModalOpen(false);
     setIsTaskModalOpen(true);
@@ -665,6 +818,89 @@ export default function SimpleNotionApp() {
     setPageDeleteConfirmInput("");
   };
 
+  const createTab = () => {
+    if (!canEdit || !selectedPage) return;
+
+    const newTab = {
+      id: createId(),
+      title: `Tab ${getPageTabs(currentPage).length + 1}`,
+      tasks: [],
+    };
+
+    setPages((previousPages) => {
+      const nextPages = previousPages.map((page) =>
+        page.id === selectedPage
+          ? {
+              ...page,
+              updatedAt: Date.now(),
+              tabs: [...getPageTabs(page), newTab],
+              tasks: [...getPageTabs(page).flatMap((tab) => tab.tasks || []), ...newTab.tasks],
+            }
+          : page
+      );
+
+      const updatedPage = nextPages.find((page) => page.id === selectedPage);
+      if (updatedPage) {
+        savePageToFirestore(updatedPage);
+      }
+
+      return nextPages;
+    });
+
+    setSelectedTabId(newTab.id);
+  };
+
+  const renameActiveTab = (title) => {
+    if (!canEdit || !selectedPage || !activeTab) return;
+
+    setPages((previousPages) => {
+      const nextPages = previousPages.map((page) => {
+        if (page.id !== selectedPage) return page;
+
+        const updatedTabs = getPageTabs(page).map((tab) =>
+          tab.id === activeTab.id ? { ...tab, title: title.trim() || activeTab.title } : tab
+        );
+
+        return {
+          ...page,
+          updatedAt: Date.now(),
+          tabs: updatedTabs,
+          tasks: updatedTabs.flatMap((tab) => tab.tasks || []),
+        };
+      });
+
+      const updatedPage = nextPages.find((page) => page.id === selectedPage);
+      if (updatedPage) {
+        savePageToFirestore(updatedPage);
+      }
+
+      return nextPages;
+    });
+  };
+
+  const handleSelectTab = (tabId) => setSelectedTabId(tabId);
+
+  const filteredTasks = useMemo(() => {
+    let result = [...sortedTasks];
+
+    if (taskFilters.category !== "All") {
+      result = result.filter((task) => task.category === taskFilters.category);
+    }
+
+    if (taskFilters.assigned !== "All") {
+      const assignedFilter = taskFilters.assigned === "Assigned";
+      result = result.filter((task) => Boolean(task.assignedTo) === assignedFilter);
+    }
+
+    if (taskFilters.upload !== "All") {
+      result = result.filter((task) => task.uploadStatus === taskFilters.upload);
+    }
+
+    return result;
+  }, [sortedTasks, taskFilters]);
+
+  const taskFilterCount = filteredTasks.length;
+
   if (!isLoaded) {
     return null;
   }
@@ -691,27 +927,91 @@ export default function SimpleNotionApp() {
         onMarkPageNotificationsAsViewed={markTaskNotificationsAsViewed}
       />
 
-      <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-10">
+      <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 lg:p-10">
         <PageEditor
           currentPage={currentPage}
           canEdit={canEdit}
+          tabs={getPageTabs(currentPage)}
+          activeTab={activeTab}
           onUpdatePage={updatePage}
-          onAddTask={addTask}
+          onCreateTab={createTab}
+          onSelectTab={handleSelectTab}
+          onRenameTab={renameActiveTab}
         >
-          <TaskList
-            tasks={sortedTasks}
-            canEdit={canEdit}
-            profile={profile}
-            users={users}
-            selectedPageId={selectedPage}
-            viewedNotifications={viewedNotifications}
-            onViewTask={handleViewTask}
-            onToggleDone={handleCheckboxChange}
-            onStatusChange={handleStatusChange}
-            onUploadStatusChange={handleUploadStatusChange}
-            onConfirmDelete={confirmDeleteTask}
-            onAssignTask={handleAssignTask}
-          />
+          <div className="space-y-4">
+            <div className="flex flex-col gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-3 sm:flex-row sm:items-end sm:justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+              <label className="text-sm text-zinc-400">
+                <span className="mb-1 block">Category</span>
+                <select
+                  value={taskFilters.category}
+                  onChange={(event) => setTaskFilters((prev) => ({ ...prev, category: event.target.value }))}
+                  className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
+                >
+                  <option value="All">All</option>
+                  <option value="Uncategorize">Uncategorize</option>
+                  <option value="Non-CTA">Non-CTA</option>
+                  <option value="CTA">CTA</option>
+                </select>
+              </label>
+
+              <label className="text-sm text-zinc-400">
+                <span className="mb-1 block">Assigned</span>
+                <select
+                  value={taskFilters.assigned}
+                  onChange={(event) => setTaskFilters((prev) => ({ ...prev, assigned: event.target.value }))}
+                  className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
+                >
+                  <option value="All">All</option>
+                  <option value="Assigned">Assigned</option>
+                  <option value="Unassigned">Unassigned</option>
+                </select>
+              </label>
+
+              <label className="text-sm text-zinc-400">
+                <span className="mb-1 block">Upload</span>
+                <select
+                  value={taskFilters.upload}
+                  onChange={(event) => setTaskFilters((prev) => ({ ...prev, upload: event.target.value }))}
+                  className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
+                >
+                  <option value="All">All</option>
+                  <option value="Not Uploaded">Not Uploaded</option>
+                  <option value="Uploaded">Uploaded</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <button
+                onClick={addTask}
+                disabled={!canEdit || !activeTab}
+                className="w-full sm:w-auto rounded-2xl bg-white px-4 py-3 text-black transition hover:bg-zinc-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Add Task
+              </button>
+
+              <div className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-300">
+                {taskFilterCount} result{taskFilterCount === 1 ? "" : "s"}
+              </div>
+            </div>
+            </div>
+
+            <TaskList
+              tasks={filteredTasks}
+              canEdit={canEdit}
+              profile={profile}
+              users={users}
+              selectedPageId={selectedPage}
+              viewedNotifications={viewedNotifications}
+              onViewTask={handleViewTask}
+              onToggleDone={handleCheckboxChange}
+              onStatusChange={handleStatusChange}
+              onUploadStatusChange={handleUploadStatusChange}
+              onConfirmDelete={confirmDeleteTask}
+              onAssignTask={handleAssignTask}
+            />
+          </div>
         </PageEditor>
       </main>
 

@@ -70,8 +70,11 @@ export default function TaskList({
               className="flex-1 min-w-0 cursor-pointer"
               onClick={() => onViewTask(task)}
             >
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <div className="font-semibold break-words">{task.title}</div>
+                <span className="rounded-full border border-zinc-700 px-2 py-0.5 text-[10px] uppercase tracking-wide text-zinc-400">
+                  {task.category || "Uncategorize"}
+                </span>
                 {hasUnviewedNotification(task) && (
                   <div className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0"></div>
                 )}

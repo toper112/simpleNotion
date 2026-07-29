@@ -53,32 +53,44 @@ export default function ViewTaskModal({ selectedTask, onClose, onEdit, canEdit }
           </h3>
 
           <div className="space-y-4 rounded-xl border border-zinc-800 p-4 text-zinc-200">
-            <div>
-              <h4 className="mb-1 text-sm font-semibold uppercase tracking-wide text-zinc-400">
-                Inspiration
-              </h4>
-              <p className="whitespace-pre-wrap break-words">
-                {renderWithLinks(selectedTask.note_inspo) || "—"}
-              </p>
-            </div>
+            {selectedTask.note_inspo ||
+            selectedTask.note_setting ||
+            selectedTask.note_cp ? (
+              <>
+                <div>
+                  <h4 className="mb-1 text-sm font-semibold uppercase tracking-wide text-zinc-400">
+                    Inspiration
+                  </h4>
+                  <p className="whitespace-pre-wrap break-words">
+                    {renderWithLinks(selectedTask.note_inspo) || "—"}
+                  </p>
+                </div>
 
-            <div>
-              <h4 className="mb-1 text-sm font-semibold uppercase tracking-wide text-zinc-400">
-                Settings
-              </h4>
-              <p className="whitespace-pre-wrap break-words">
-                {renderWithLinks(selectedTask.note_setting) || "—"}
-              </p>
-            </div>
+                <div>
+                  <h4 className="mb-1 text-sm font-semibold uppercase tracking-wide text-zinc-400">
+                    Settings
+                  </h4>
+                  <p className="whitespace-pre-wrap break-words">
+                    {renderWithLinks(selectedTask.note_setting) || "—"}
+                  </p>
+                </div>
 
-            <div>
-              <h4 className="mb-1 text-sm font-semibold uppercase tracking-wide text-zinc-400">
-                Crucial Points / Notes
-              </h4>
-              <p className="whitespace-pre-wrap break-words">
-                {renderWithLinks(selectedTask.note_cp) || "—"}
-              </p>
-            </div>
+                <div>
+                  <h4 className="mb-1 text-sm font-semibold uppercase tracking-wide text-zinc-400">
+                    Crucial Points / Notes
+                  </h4>
+                  <p className="whitespace-pre-wrap break-words">
+                    {renderWithLinks(selectedTask.note_cp) || "—"}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <div>
+                <p className="whitespace-pre-wrap break-words">
+                  {renderWithLinks(selectedTask.note) || "No notes available"}
+                </p>
+              </div>
+            )}
           </div>
         </div>
 

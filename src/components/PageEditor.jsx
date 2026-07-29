@@ -57,7 +57,7 @@ export default function PageEditor({
                   onClick={onCreateTab}
                   className="rounded-full border border-zinc-700 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800"
                 >
-                  + Create New Tab
+                  + Tab
                 </button>
               )}
             </div>

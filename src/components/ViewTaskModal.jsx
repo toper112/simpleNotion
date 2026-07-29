@@ -48,9 +48,37 @@ export default function ViewTaskModal({ selectedTask, onClose, onEdit, canEdit }
         </div>
 
         <div className="mb-4">
-          <h3 className="text-xl sm:text-2xl uppercase tracking-widest text-zinc-500 mb-1">Note:</h3>
-          <div className="text-zinc-200 whitespace-pre-wrap leading-relaxed border border-zinc-800 rounded-xl p-3 break-words">
-            {renderWithLinks(selectedTask.note)}
+          <h3 className="mb-2 text-xl sm:text-2xl uppercase tracking-widest text-zinc-500">
+            Notes
+          </h3>
+
+          <div className="space-y-4 rounded-xl border border-zinc-800 p-4 text-zinc-200">
+            <div>
+              <h4 className="mb-1 text-sm font-semibold uppercase tracking-wide text-zinc-400">
+                Inspiration
+              </h4>
+              <p className="whitespace-pre-wrap break-words">
+                {renderWithLinks(selectedTask.note_inspo) || "—"}
+              </p>
+            </div>
+
+            <div>
+              <h4 className="mb-1 text-sm font-semibold uppercase tracking-wide text-zinc-400">
+                Settings
+              </h4>
+              <p className="whitespace-pre-wrap break-words">
+                {renderWithLinks(selectedTask.note_setting) || "—"}
+              </p>
+            </div>
+
+            <div>
+              <h4 className="mb-1 text-sm font-semibold uppercase tracking-wide text-zinc-400">
+                Crucial Points / Notes
+              </h4>
+              <p className="whitespace-pre-wrap break-words">
+                {renderWithLinks(selectedTask.note_cp) || "—"}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -69,17 +97,6 @@ export default function ViewTaskModal({ selectedTask, onClose, onEdit, canEdit }
             className="bg-white text-black px-4 sm:px-5 py-3 rounded-xl shadow-lg active:scale-95 transition"
           >
             Edit
-          </button>
-        </div>
-      )}
-
-      {!canEdit && (
-        <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6">
-          <button
-            onClick={onClose}
-            className="bg-amber-500 text-black px-4 sm:px-5 py-3 rounded-xl shadow-lg active:scale-95 transition"
-          >
-            Verify to Edit
           </button>
         </div>
       )}

@@ -79,9 +79,6 @@ export default function TaskList({
                   <div className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0"></div>
                 )}
               </div>
-              <div className="text-xs text-zinc-400 break-words">
-                {task.note?.length > 80 ? `${task.note.slice(0, 80)}...` : task.note}
-              </div>
             </div>
 
             {canEdit && (

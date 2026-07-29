@@ -30,7 +30,7 @@ export default function SimpleNotionApp() {
   const [selectedPage, setSelectedPage] = useState(null);
   const [selectedTabId, setSelectedTabId] = useState(null);
   const [newPageTitle, setNewPageTitle] = useState("");
-  const [taskFilters, setTaskFilters] = useState({ category: "All", assigned: "All", upload: "All" });
+  const [taskFilters, setTaskFilters] = useState({ category: "All", assigned: "All", upload: "All", assigned_user: "All" });
   const [isLoaded, setIsLoaded] = useState(false);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
@@ -331,11 +331,13 @@ export default function SimpleNotionApp() {
       
       if (originalTask) {
         const titleChanged = taskForm.title.trim() !== originalTask.title.trim();
-        const noteChanged = taskForm.note.trim() !== originalTask.note.trim();
+        const noteInspoChanged = taskForm.note_inspo.trim() !== originalTask.note_inspo.trim();
+        const noteSettingChanged = taskForm.note_setting.trim() !== originalTask.note_setting.trim();
+        const noteCpChanged = taskForm.note_cp.trim() !== originalTask.note_cp.trim();
         const descriptionChanged = taskForm.description.trim() !== originalTask.description.trim();
         
         // If no meaningful changes, just close the modal without saving
-        if (!titleChanged && !noteChanged && !descriptionChanged) {
+        if (!titleChanged && !noteInspoChanged && !noteSettingChanged && !noteCpChanged && !descriptionChanged) {
           setIsTaskModalOpen(false);
           setTaskForm(emptyTaskForm);
           return;
@@ -360,7 +362,9 @@ export default function SimpleNotionApp() {
                       {
                         id: createId(),
                         title: taskForm.title,
-                        note: taskForm.note,
+                        note_inspo: taskForm.note_inspo,
+                        note_setting: taskForm.note_setting,
+                        note_cp: taskForm.note_cp,
                         description: taskForm.description,
                         done: false,
                         uploadStatus: taskForm.uploadStatus || "Not Uploaded",
@@ -889,11 +893,15 @@ export default function SimpleNotionApp() {
 
     if (taskFilters.assigned !== "All") {
       const assignedFilter = taskFilters.assigned === "Assigned";
-      result = result.filter((task) => Boolean(task.assignedTo) === assignedFilter);
-    }
+      result = result.filter((task) => Boolean(task.assignedTo) === assignedFilter); 
+    } 
 
     if (taskFilters.upload !== "All") {
       result = result.filter((task) => task.uploadStatus === taskFilters.upload);
+    }
+
+    if (taskFilters.assigned_user !== "All") {
+      result = result.filter((task) => task.assignedTo === taskFilters.assigned_user);
     }
 
     return result;
@@ -978,6 +986,26 @@ export default function SimpleNotionApp() {
                   <option value="All">All</option>
                   <option value="Not Uploaded">Not Uploaded</option>
                   <option value="Uploaded">Uploaded</option>
+                </select>
+              </label>
+
+              <label className="text-sm text-zinc-400">
+                <span className="mb-1 block">Assigned To</span>
+                <select
+                  value={taskFilters.assigned_user}
+                  onChange={(event) => setTaskFilters((prev) => ({ ...prev, assigned_user: event.target.value }))}
+                  className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
+                >
+                  <option value="All">All</option>
+                  {users.map((user) => {
+                    if (user.role === "admin") return null;
+
+                    return (
+                      <option key={user.uid} value={user.uid}>
+                        {user.name || user.email}
+                      </option>
+                    );
+                  })}
                 </select>
               </label>
             </div>

@@ -3,7 +3,7 @@ export default function TaskModal({ taskForm, onChangeTaskForm, onCancel, onSave
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-2 sm:p-4 z-50">
       <div className="bg-zinc-900 w-full sm:w-[90vw] md:w-[70vw] h-[95vh] md:h-[70vh] overflow-y-auto rounded-2xl p-4 sm:p-6 space-y-3">
         <input
-          placeholder="Title"
+          placeholder="Title:"
           value={taskForm.title}
           onChange={(event) => onChangeTaskForm({ ...taskForm, title: event.target.value })}
           className="w-full p-3 bg-zinc-800 rounded-xl"
@@ -34,15 +34,29 @@ export default function TaskModal({ taskForm, onChangeTaskForm, onCancel, onSave
           </select>
         </div>
 
-        <textarea
-          placeholder="Note"
-          value={taskForm.note}
-          onChange={(event) => onChangeTaskForm({ ...taskForm, note: event.target.value })}
-          className="w-full h-32 p-3 bg-zinc-800 rounded-xl resize-none text-sm sm:text-base"
+        <input
+          placeholder="Inspo:"
+          value={taskForm.note_inspo}
+          onChange={(event) => onChangeTaskForm({ ...taskForm, note_inspo: event.target.value })}
+          className="w-full p-3 bg-zinc-800 rounded-xl"
+        />
+
+        <input
+          placeholder="Setting:"
+          value={taskForm.note_setting}
+          onChange={(event) => onChangeTaskForm({ ...taskForm, note_setting: event.target.value })}
+          className="w-full p-3 bg-zinc-800 rounded-xl"
+        />
+
+        <input
+          placeholder="Crucial Point/Note:"
+          value={taskForm.note_cp}
+          onChange={(event) => onChangeTaskForm({ ...taskForm, note_cp: event.target.value })}
+          className="w-full p-3 bg-zinc-800 rounded-xl"
         />
 
         <textarea
-          placeholder="Description"
+          placeholder="Details:"
           value={taskForm.description}
           onChange={(event) => onChangeTaskForm({ ...taskForm, description: event.target.value })}
           className="w-full min-h-[250px] md:min-h-[320px] p-3 bg-zinc-800 rounded-xl text-sm sm:text-base"

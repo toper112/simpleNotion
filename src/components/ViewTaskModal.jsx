@@ -1,5 +1,19 @@
+import React, { useState } from "react";
+
 export default function ViewTaskModal({ selectedTask, onClose, onEdit, canEdit }) {
   if (!selectedTask) return null;
+
+  const [copied, setCopied] = useState(false);
+
+  const titleToClipboard = async (title) => {
+    try {
+      await navigator.clipboard.writeText(title);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const renderWithLinks = (text) => {
     if (!text) return null;
@@ -32,9 +46,18 @@ export default function ViewTaskModal({ selectedTask, onClose, onEdit, canEdit }
         className="bg-zinc-900 w-full sm:w-[90vw] md:w-[70vw] h-[90vh] md:h-[70vh] overflow-y-auto rounded-2xl p-4 sm:p-6"
         onClick={(event) => event.stopPropagation()}
       >
-        <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-6 break-words">
-          {selectedTask.title}
-        </h2>
+        <div className="mb-6 flex items-center justify-between gap-4">
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold break-words flex-1">
+            {selectedTask.title}
+          </h2>
+
+          <button
+            onClick={() => titleToClipboard(selectedTask.title)}
+            className="rounded-full border border-zinc-700 px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 transition"
+          >
+            {copied ? "Copied!" : "Copy"}
+          </button>
+        </div>
 
         <div className="mb-3 flex flex-wrap gap-2">
           <span className="rounded-full border border-zinc-700 px-3 py-1 text-sm text-zinc-300">

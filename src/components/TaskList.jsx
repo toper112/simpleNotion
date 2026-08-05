@@ -138,9 +138,9 @@ export default function TaskList({
                     : "border-zinc-700"
                 }`}
               >
+                <option value="NOT STARTED">❌</option>
                 <option value="GENERATING">⏳</option>
                 <option value="EDITING">✏️</option>
-                <option value="NOT STARTED">❌</option>
                 <option value="DONE">✓</option>
               </select>
 
@@ -159,9 +159,9 @@ export default function TaskList({
                     : "border-zinc-700"
                 }`}
               >
+                <option value="NOT STARTED">NOT STARTED</option>
                 <option value="GENERATING">GENERATING</option>
                 <option value="EDITING">EDITING</option>
-                <option value="NOT STARTED">NOT STARTED</option>
                 <option value="DONE">DONE</option>
               </select>
             </div>

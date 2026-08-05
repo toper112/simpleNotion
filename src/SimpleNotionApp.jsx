@@ -22,6 +22,7 @@ import {
 
 const pagesCollection = collection(db, "notionPages");
 const usersCollection = collection(db, "users");
+const isAdmin = (profile) => profile?.role === "admin";
 
 export default function SimpleNotionApp() {
   const { profile, logout } = useAuth();
@@ -1011,14 +1012,16 @@ export default function SimpleNotionApp() {
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <button
-                onClick={addTask}
-                disabled={!canEdit || !activeTab}
-                className="w-full sm:w-auto rounded-2xl bg-white px-4 py-3 text-black transition hover:bg-zinc-100 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Add Task
-              </button>
-
+              {isAdmin(profile) && (
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <button
+                    onClick={addTask}
+                    className="w-full sm:w-auto rounded-2xl bg-white px-4 py-3 text-black transition hover:bg-zinc-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Add Task
+                  </button>
+                </div>
+              )}
               <div className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-300">
                 {taskFilterCount} result{taskFilterCount === 1 ? "" : "s"}
               </div>

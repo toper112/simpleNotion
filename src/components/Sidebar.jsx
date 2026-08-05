@@ -43,7 +43,8 @@ export default function Sidebar({
         )}
       </div>
 
-      <div className="flex gap-2 mb-4">
+      {isAdmin && (
+        <div className="flex gap-2 mb-4">
         <input
           value={newPageTitle}
           onChange={(e) => onChangeNewPageTitle(e.target.value)}
@@ -53,14 +54,15 @@ export default function Sidebar({
           className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-3 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
         />
 
-        <button
+        (<button
           onClick={onCreatePage}
           disabled={!canEdit}
           className="bg-white text-black px-4 py-3 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Add
-        </button>
+        </button>)
       </div>
+      )}
 
       <div className="space-y-2 overflow-y-auto flex-1 pb-2">
         {pagesSorted.map((page) => (

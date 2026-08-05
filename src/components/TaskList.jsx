@@ -105,13 +105,16 @@ export default function TaskList({
               onChange={(event) => onStatusChange(task.id, event.target.value)}
               disabled={!userCanEdit}
               className={`ml-2 px-3 py-1 rounded-md bg-zinc-800 border border-zinc-700 text-sm disabled:opacity-80 disabled:cursor-not-allowed ${
-                task.status === "EDITING"
+                task.status === "GENERATING"
+                  ? "text-yellow-400"
+                  : task.status === "EDITING"
                   ? "text-blue-400"
                   : task.status === "DONE"
                   ? "text-green-400"
                   : "text-zinc-300"
               }`}
             >
+              <option value="GENERATING">GENERATING</option>
               <option value="EDITING">EDITING</option>
               <option value="NOT STARTED">NOT STARTED</option>
               <option value="DONE">DONE</option>

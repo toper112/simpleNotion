@@ -43,7 +43,7 @@ export default function ViewTaskModal({ selectedTask, onClose, onEdit, canEdit }
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-2 sm:p-4 z-50" onClick={onClose}>
       <div
-        className="bg-zinc-900 w-full sm:w-[90vw] md:w-[70vw] h-[90vh] md:h-[70vh] overflow-y-auto rounded-2xl p-4 sm:p-6"
+        className="bg-zinc-900 w-full max-w-[95vw] h-[95vh] overflow-y-auto rounded-2xl p-4 sm:p-6 lg:p-8"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mb-6 flex items-center justify-between gap-4">

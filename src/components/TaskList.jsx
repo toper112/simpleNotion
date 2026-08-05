@@ -82,55 +82,120 @@ export default function TaskList({
             </div>
 
             {canEdit && (
-              <select
-                value={task.assignedTo || ""}
-                onChange={(event) => onAssignTask(task.id, event.target.value)}
-                className="px-3 py-1 rounded-md bg-zinc-800 border border-zinc-700 text-sm"
-              >
-                <option value="">Unassigned</option>
-                {users.map((user) => (
-                  <option key={user.uid} value={user.uid}>
-                    {user.name || user.email}
+              <div className="ml-2">
+                {/* Mobile icon dropdown */}
+                <select
+                  value={task.assignedTo || ""}
+                  onChange={(event) => onAssignTask(task.id, event.target.value)}
+                  className="sm:hidden p-2 rounded-md bg-zinc-800 border border-zinc-700 text-zinc-300"
+                  title={task.assignedTo ? getUserName(task.assignedTo) : "Unassigned"}
+                >
+                  <option value="">
+                    👤
                   </option>
-                ))}
-              </select>
+                  {users.map((user) => (
+                    <option key={user.uid} value={user.uid}>
+                      👤
+                    </option>
+                  ))}
+                </select>
+
+                {/* Desktop dropdown */}
+                <select
+                  value={task.assignedTo || ""}
+                  onChange={(event) => onAssignTask(task.id, event.target.value)}
+                  className="hidden sm:block px-3 py-1 rounded-md bg-zinc-800 border border-zinc-700 text-sm text-zinc-300"
+                >
+                  <option value="">Unassigned</option>
+                  {users.map((user) => (
+                    <option key={user.uid} value={user.uid}>
+                      {user.name || user.email}
+                    </option>
+                  ))}
+                </select>
+              </div>
             )}
 
             {!canEdit && (
-              <div className="text-xs text-zinc-500">Assigned: {getUserName(task.assignedTo)}</div>
+              <div className="text-xs text-zinc-500">
+                Assigned: {getUserName(task.assignedTo)}
+              </div>
             )}
 
-            <select
-              value={task.status || "NOT STARTED"}
-              onChange={(event) => onStatusChange(task.id, event.target.value)}
-              disabled={!userCanEdit}
-              className={`ml-2 px-3 py-1 rounded-md bg-zinc-800 border border-zinc-700 text-sm disabled:opacity-80 disabled:cursor-not-allowed ${
-                task.status === "GENERATING"
-                  ? "text-yellow-400"
-                  : task.status === "EDITING"
-                  ? "text-blue-400"
-                  : task.status === "DONE"
-                  ? "text-green-400"
-                  : "text-zinc-300"
-              }`}
-            >
-              <option value="GENERATING">GENERATING</option>
-              <option value="EDITING">EDITING</option>
-              <option value="NOT STARTED">NOT STARTED</option>
-              <option value="DONE">DONE</option>
-            </select>
+           <div className="ml-2">
+              {/* Mobile icon dropdown */}
+              <select
+                value={task.status || "NOT STARTED"}
+                onChange={(event) => onStatusChange(task.id, event.target.value)}
+                disabled={!userCanEdit}
+                className={`sm:hidden p-2 rounded-md bg-zinc-800 border text-zinc-300 disabled:opacity-80 ${
+                  task.status === "GENERATING"
+                    ? "border-yellow-400"
+                    : task.status === "EDITING"
+                    ? "border-blue-400"
+                    : task.status === "DONE"
+                    ? "border-green-400"
+                    : "border-zinc-700"
+                }`}
+              >
+                <option value="GENERATING">⏳</option>
+                <option value="EDITING">✏️</option>
+                <option value="NOT STARTED">❌</option>
+                <option value="DONE">✓</option>
+              </select>
 
-            <select
-              value={task.uploadStatus || "Not Uploaded"}
-              onChange={(event) => onUploadStatusChange(task.id, event.target.value)}
-              disabled={!userCanEdit || task.status !== "DONE"}
-              className={`ml-2 px-3 py-1 rounded-md bg-zinc-800 border border-zinc-700 text-sm disabled:opacity-80 disabled:cursor-not-allowed ${
-                task.uploadStatus === "Uploaded" ? "text-emerald-400" : "text-zinc-300"
-              }`}
-            >
-              <option value="Not Uploaded">Not Uploaded</option>
-              <option value="Uploaded">Uploaded</option>
-            </select>
+              {/* Desktop dropdown */}
+              <select
+                value={task.status || "NOT STARTED"}
+                onChange={(event) => onStatusChange(task.id, event.target.value)}
+                disabled={!userCanEdit}
+                className={`hidden sm:block px-3 py-1 rounded-md bg-zinc-800 border text-sm text-zinc-300 disabled:opacity-80 disabled:cursor-not-allowed ${
+                  task.status === "GENERATING"
+                    ? "border-yellow-400"
+                    : task.status === "EDITING"
+                    ? "border-blue-400"
+                    : task.status === "DONE"
+                    ? "border-green-400"
+                    : "border-zinc-700"
+                }`}
+              >
+                <option value="GENERATING">GENERATING</option>
+                <option value="EDITING">EDITING</option>
+                <option value="NOT STARTED">NOT STARTED</option>
+                <option value="DONE">DONE</option>
+              </select>
+            </div>
+            <div className="ml-2">
+              {/* Mobile icon dropdown */}
+              <select
+                value={task.uploadStatus || "Not Uploaded"}
+                onChange={(event) => onUploadStatusChange(task.id, event.target.value)}
+                disabled={!userCanEdit || task.status !== "DONE"}
+                className={`sm:hidden p-2 rounded-md bg-zinc-800 border text-zinc-300 disabled:opacity-80 disabled:cursor-not-allowed ${
+                  task.uploadStatus === "Uploaded"
+                    ? "border-emerald-400"
+                    : "border-zinc-700"
+                }`}
+              >
+                <option value="Not Uploaded">❌</option>
+                <option value="Uploaded">✓</option>
+              </select>
+
+              {/* Desktop dropdown */}
+              <select
+                value={task.uploadStatus || "Not Uploaded"}
+                onChange={(event) => onUploadStatusChange(task.id, event.target.value)}
+                disabled={!userCanEdit || task.status !== "DONE"}
+                className={`hidden sm:block px-3 py-1 rounded-md bg-zinc-800 border text-sm text-zinc-300 disabled:opacity-80 disabled:cursor-not-allowed ${
+                  task.uploadStatus === "Uploaded"
+                    ? "border-emerald-400"
+                    : "border-zinc-700"
+                }`}
+              >
+                <option value="Not Uploaded">Not Uploaded</option>
+                <option value="Uploaded">Uploaded</option>
+              </select>
+            </div>
 
             {canEdit && (
               <button

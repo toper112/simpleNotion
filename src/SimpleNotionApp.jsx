@@ -42,6 +42,7 @@ export default function SimpleNotionApp() {
   const [showPageDeleteModal, setShowPageDeleteModal] = useState(false);
   const [pageToDeleteId, setPageToDeleteId] = useState(null);
   const [pageDeleteConfirmInput, setPageDeleteConfirmInput] = useState("");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [viewedNotifications, setViewedNotificationsState] = useState(() => {
     // Load viewed notifications from localStorage on mount
     try {
@@ -915,28 +916,47 @@ export default function SimpleNotionApp() {
   }
 
   return (
-    <div className="h-screen flex flex-col md:flex-row bg-zinc-950 text-white overflow-hidden">
-      <Sidebar
-        pagesSorted={pagesFiltered}
-        selectedPage={selectedPage}
-        newPageTitle={newPageTitle}
-        canEdit={canEdit}
-        isAdmin={profile?.role === "admin"}
-        profile={profile}
-        onSelectPage={handleSelectPage}
-        onCreatePage={createPage}
-        onNewPageKeyDown={handleNewPageKeyDown}
-        onRequestDeletePage={requestDeletePage}
-        onChangeNewPageTitle={setNewPageTitle}
-        onLogout={logout}
-        formatPageDate={formatPageDate}
-        notifications={notifications}
-        onNotificationTaskClick={handleNotificationTaskClick}
-        pagesWithUnviewedNotifications={pagesWithUnviewedNotifications}
-        onMarkPageNotificationsAsViewed={markTaskNotificationsAsViewed}
-      />
+    <div className="h-screen flex bg-zinc-950 text-white overflow-hidden">
+      {!sidebarCollapsed && (
+        <Sidebar
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed(true)}
+          pagesSorted={pagesFiltered}
+          selectedPage={selectedPage}
+          newPageTitle={newPageTitle}
+          canEdit={canEdit}
+          isAdmin={profile?.role === "admin"}
+          profile={profile}
+          onSelectPage={handleSelectPage}
+          onCreatePage={createPage}
+          onNewPageKeyDown={handleNewPageKeyDown}
+          onRequestDeletePage={requestDeletePage}
+          onChangeNewPageTitle={setNewPageTitle}
+          onLogout={logout}
+          formatPageDate={formatPageDate}
+          notifications={notifications}
+          onNotificationTaskClick={handleNotificationTaskClick}
+          pagesWithUnviewedNotifications={pagesWithUnviewedNotifications}
+          onMarkPageNotificationsAsViewed={markTaskNotificationsAsViewed}
+        />
+      )}
 
-      <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 lg:p-10">
+      {sidebarCollapsed && (
+      <button
+        onClick={() => setSidebarCollapsed(false)}
+        className="
+          fixed top-4 left-4 z-50
+          rounded-lg bg-zinc-900
+          p-3 text-white
+          shadow-lg
+          hover:bg-zinc-800
+        "
+      >
+        ☰
+      </button>
+    )}
+
+      <main className="flex-1 min-w-0 overflow-y-auto p-4 sm:p-6 lg:p-8">
         <PageEditor
           currentPage={currentPage}
           canEdit={canEdit}

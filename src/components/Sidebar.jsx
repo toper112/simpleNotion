@@ -1,7 +1,10 @@
 import { Link } from "react-router-dom";
 import NotificationPanel from "./NotificationPanel";
 
+
 export default function Sidebar({
+  collapsed,
+  onToggleCollapse,
   pagesSorted,
   selectedPage,
   newPageTitle,
@@ -26,7 +29,25 @@ export default function Sidebar({
   };
 
   return (
-    <aside className="w-full md:w-80 border-b md:border-b-0 md:border-r border-zinc-800 bg-zinc-900 p-4 flex flex-col max-h-[40vh] md:max-h-full">
+    <aside
+      className={`
+        fixed md:relative
+        top-0 left-0 z-40
+        h-screen
+        w-80
+        bg-zinc-900
+        border-r border-zinc-800
+        flex flex-col
+        p-4
+        transition-transform duration-300
+
+        ${
+          collapsed
+            ? "-translate-x-full"
+            : "translate-x-0"
+        }
+      `}
+    >
       <div className="mb-6 flex items-center justify-between gap-2">
         <div>
           <h1 className="text-2xl font-bold">Simple Notion</h1>
@@ -36,13 +57,15 @@ export default function Sidebar({
             </div>
           )}
         </div>
-        {profile && (
-          <button onClick={onLogout} className="text-sm rounded-xl bg-zinc-800 px-3 py-2 hover:bg-zinc-700">
-            Logout
-          </button>
-        )}
+        <button
+          onClick={onToggleCollapse}
+          className="mb-4 self-end rounded-lg p-2 hover:bg-zinc-800"
+        >
+          {collapsed ? "☰" : "←"}
+        </button>
+        
       </div>
-
+      
       {isAdmin && (
         <div className="flex gap-2 mb-4">
         <input
@@ -54,13 +77,13 @@ export default function Sidebar({
           className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-3 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
         />
 
-        (<button
+        <button
           onClick={onCreatePage}
           disabled={!canEdit}
           className="bg-white text-black px-4 py-3 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Add
-        </button>)
+        </button>
       </div>
       )}
 
@@ -120,6 +143,11 @@ export default function Sidebar({
             Admin Dashboard
           </Link>
         )}
+        {profile && (
+                <button onClick={onLogout} className="text-sm rounded-xl bg-zinc-800 px-3 py-2 hover:bg-zinc-700">
+                  Logout
+                </button>
+              )}
       </div>
     </aside>
   );

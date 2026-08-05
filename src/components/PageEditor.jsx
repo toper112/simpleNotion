@@ -12,14 +12,14 @@ export default function PageEditor({
 }) {
   if (!currentPage) {
     return (
-      <div className="max-w-7xl mx-auto py-20 text-center text-zinc-400">
+      <div className="w-full py-20 text-center text-zinc-400">
         <p className="text-xl font-semibold">Please select a page or create a new one.</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto flex flex-col gap-6">
+  <div className="w-full max-w-[1800px] mx-auto flex flex-col gap-6">
       <div className="rounded-3xl border border-zinc-800 bg-zinc-900/80 p-4 sm:p-6 shadow-2xl shadow-black/20">
         <input
           value={currentPage.title}

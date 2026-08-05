@@ -51,14 +51,23 @@ export default function ViewTaskModal({ selectedTask, onClose, onEdit, canEdit }
             {selectedTask.title}
           </h2>
 
-          <button
-            onClick={() => titleToClipboard(selectedTask.title)}
-            className="rounded-full border border-zinc-700 px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 transition"
-          >
-            {copied ? "Copied!" : "Copy"}
-          </button>
-        </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => titleToClipboard(selectedTask.title)}
+              className="rounded-full border border-zinc-700 px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 transition"
+            >
+              {copied ? "Copied!" : "Copy"}
+            </button>
 
+            <button
+              onClick={onClose}
+              className="rounded-full border border-zinc-700 w-10 h-10 text-zinc-300 hover:bg-zinc-800 transition text-xl"
+              aria-label="Close modal"
+            >
+              ❌
+            </button>
+          </div>
+        </div>
         <div className="mb-3 flex flex-wrap gap-2">
           <span className="rounded-full border border-zinc-700 px-3 py-1 text-sm text-zinc-300">
             Category: {selectedTask.category || "Uncategorize"}
